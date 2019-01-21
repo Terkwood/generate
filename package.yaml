@@ -1,0 +1,101 @@
+name:                generate
+version:             0.1.0.0
+github:              "githubuser/generate"
+license:             BSD3
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2019 Author name here"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/generate#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- cairo
+- colour
+- vector
+- random-source
+- random-fu
+- mtl
+- rvar
+- gtk
+- transformers
+- gtkglext
+- options
+- time
+- linear
+- lens
+- splines
+- Noise
+- split
+- hashtables
+- hashmap
+- array
+- monad-loops
+- random
+- random-shuffle
+- accelerate
+- accelerate-llvm-native
+- accelerate-llvm-ptx
+- accelerate-io
+- llvm-hs
+- colour-accelerate
+- linear-accelerate
+- gloss-raster-accelerate
+
+default-extensions:
+- NamedFieldPuns
+- DuplicateRecordFields
+- OverloadedStrings
+- NamedFieldPuns
+- DeriveAnyClass
+- GeneralizedNewtypeDeriving
+- RecordWildCards
+- OverloadedLabels
+- ExistentialQuantification
+- DeriveFunctor
+- RankNTypes
+- TupleSections
+- ScopedTypeVariables
+- FlexibleInstances
+- UndecidableInstances
+- MonoLocalBinds
+- FlexibleContexts
+- ViewPatterns
+- MultiParamTypeClasses
+
+
+library:
+  source-dirs: src
+
+executables:
+  generate-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - generate
+
+tests:
+  generate-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - generate
