@@ -4,16 +4,19 @@ module Generate.Monad
   , Context(..)
   , Random(..)
   , World(..)
+  , noiseSample
   , runRand
   , scaledDimensions
-  )
-where
+  ) where
 
-import           Control.Monad.Reader
-import           Control.Monad.State           as State
-import           Data.Random.Source.PureMT
-import           Graphics.Rendering.Cairo
-import           Math.Noise.Modules.Perlin
+import Control.Monad.Reader
+import Control.Monad.State as State
+import Data.Maybe
+import Data.Random.Source.PureMT
+import Graphics.Rendering.Cairo
+import Linear
+import Math.Noise
+import Math.Noise.Modules.Perlin
 
 data World = World
   { width :: Double
@@ -22,7 +25,7 @@ data World = World
   } deriving (Eq, Show)
 
 scaledDimensions :: World -> (Int, Int)
-scaledDimensions World { width, height, scaleFactor, ..} =
+scaledDimensions World {width, height, scaleFactor, ..} =
   (round $ width * scaleFactor, round $ height * scaleFactor)
 
 data Context = Context
@@ -33,6 +36,11 @@ data Context = Context
   }
 
 type Generate a = StateT PureMT (Reader Context) a
+
+noiseSample :: V3 Double -> Generate (Double)
+noiseSample (V3 x y z) = do
+  noiseSrc <- asks noise
+  return $ fromJust $ getValue noiseSrc (x, y, z)
 
 runGenerate :: Context -> PureMT -> Generate a -> a
 runGenerate ctx rng scene =

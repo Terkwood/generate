@@ -79,13 +79,14 @@ library:
   source-dirs: src
 
 executables:
-  generate-exe:
+  g:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -O3
     dependencies:
     - generate
 
