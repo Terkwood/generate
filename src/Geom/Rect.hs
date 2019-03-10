@@ -1,6 +1,7 @@
 module Geom.Rect
   ( Rect(..)
   , fullFrame
+  , rectCenter
   ) where
 
 import Control.Monad.Reader
@@ -20,3 +21,6 @@ fullFrame :: Generate Rect
 fullFrame = do
   World {width, height, ..} <- asks world
   return $ Rect (V2 0 0) width height
+
+rectCenter :: Rect -> V2 Double
+rectCenter (Rect (V2 x y) w h) = V2 (x + w / 2) (y + h / 2)
