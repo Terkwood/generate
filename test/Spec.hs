@@ -1,2 +1,4 @@
+import qualified Algo.QuadTree as Q
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = Q.test

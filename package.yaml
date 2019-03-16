@@ -42,6 +42,7 @@ dependencies:
 - hashmap
 - array
 - monad-loops
+- monad-extras
 - random
 - random-shuffle
 - accelerate
@@ -52,6 +53,8 @@ dependencies:
 - colour-accelerate
 - linear-accelerate
 - gloss-raster-accelerate
+- hspec
+
 
 default-extensions:
 - NamedFieldPuns
