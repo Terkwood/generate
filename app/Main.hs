@@ -44,7 +44,7 @@ randomCircle :: Generate Circle
 randomCircle
   --radius <- sampleRVar $ normal 20 5 >>= return . (+ 1) . abs
  = do
-  let radius = 30.1
+  let radius = 15.0
   center <- randomPoint
   return $ Circle center radius
 
@@ -63,7 +63,7 @@ search (CircleSearch _ _ 0) = return Nothing
 search s@(CircleSearch tree circles remaining) = do
   let remaining' = remaining - 1
   candidate@(Circle center _) <- randomCircle
-  if validNaive circles candidate
+  if valid tree candidate
     then return $
          Just $
          CircleSearch
@@ -72,29 +72,28 @@ search s@(CircleSearch tree circles remaining) = do
            remaining'
     else return $ Just $ s {remainingAttempts = remaining'}
 
-drawCircle :: Circle -> Render ()
-drawCircle (Circle (V2 x y) r) = arc x y r 0 (2 * pi)
+drawCircle :: Circle -> Generate (Render ())
+drawCircle (Circle (V2 x y) r) = do
+  colour <- fgColour
+  return $ do
+    arc x y r 0 (2 * pi)
+    setColour (colour, 0.5 :: Double)
+    fill
 
 scene :: Generate (Render ())
 scene = do
   World {..} <- asks world
   frame <- fullFrame
-  circleSearch <- mkSearch 10
+  circleSearch <- mkSearch 2000
   circles <-
-    iterateMaybeM (search) circleSearch >>= return . (concatMap foundCircles)
-  colors <- sequence $ map (const $ fgColour) circles
+    iterateMaybeM (search) circleSearch >>= return . foundCircles . last
+  draws <- sequence $ map (drawCircle) circles
   return $ do
-    setAntialias AntialiasBest
     setColour bgColour
     rectangle 0 0 width height
     fill
-    foldr1 (>>) $
-      map
-        (\(c, col) -> do
-           setColour col
-           drawCircle c
-           fill) $
-      zip circles colors
+    foldr1 (>>) draws
+    return ()
 
 -- ["8ACEDA", "68BAD5", "373C40", "556173", "E7F5F5"]
 fgColour :: Generate (RGB Double)
@@ -107,7 +106,7 @@ fgColour = do
   return $ palette V.! i
 
 bgColour :: RGB Double
-bgColour = hexcolour "8ACEDA"
+bgColour = hexcolour "F9E4AD"
 
 main :: IO ()
 main = runInvocation scene

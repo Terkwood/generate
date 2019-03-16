@@ -1,11 +1,11 @@
 module Algo.QuadTree
-  ( QuadTree
+  ( QuadTree(..)
+  , Quad(..)
   , Leaf(..)
   , new
   , insert
   , nearest
   , empty
-  , test
   ) where
 
 import Linear
@@ -107,7 +107,7 @@ _quadrantOf r (V2 x y) =
 
 -- Returns the nearest point in the QuadTree to the given point.
 nearest :: V2 Double -> QuadTree v -> Maybe (Leaf v)
-nearest p tree = _nearest Nothing p $ V.fromList [tree]
+nearest p tree = _nearest (_treeLeaf tree) p $ V.fromList [tree]
 
 _nearest ::
      (Maybe (Leaf v)) -> V2 Double -> V.Vector (QuadTree v) -> Maybe (Leaf v)
@@ -122,13 +122,14 @@ _nearest best p trees =
         if V.null candidateLeaves'
           then Nothing
           else Just $ V.minimumBy (comparing (_leafDistance p)) candidateLeaves'
-      eligibleTrees =
-        case best' of
-          Just best' -> V.filter (_eligible p best') treesWithLeaves
-          Nothing -> treesWithLeaves
-   in if V.null treesWithLeaves
-        then best'
-        else _nearest best' p $ V.concatMap (_nextLevel) treesWithLeaves
+   in case best' of
+        Nothing -> Nothing
+        Just best' ->
+          let eligible = V.filter (_eligible p best') treesWithLeaves
+              next = V.concatMap (_nextLevel) eligible
+           in if V.null next
+                then Just best'
+                else _nearest (Just best') p next
 
 _treeLeaf :: QuadTree v -> Maybe (Leaf v)
 _treeLeaf (QuadNode (Quad _ rep _)) = rep
@@ -165,56 +166,3 @@ _distanceToNode p (LeafNode _ (Leaf leaf _)) = Just $ distance p leaf
 
 newQuad :: Rect -> Quad v
 newQuad rect = Quad rect Nothing (Nothing, Nothing, Nothing, Nothing)
-
-test :: IO ()
-test =
-  hspec $ do
-    let frame = Rect (V2 0 0) 100 100
-    describe "constructor" $ do
-      it "yields an empty tree" $ (empty $ new frame) `shouldBe` True
-    describe "insert" $ do
-      it "rejects an out of bounds leaf" $
-        (insert (Leaf (V2 10 1000) 7) $ new frame) `shouldBe` (False, new frame)
-      let expectedTreeWithOneInsertion :: QuadTree Int =
-            QuadNode $
-            Quad
-              { quadRegion = Rect (V2 0 0) 100 100
-              , quadRepresentative = Just $ Leaf (V2 10 10) 7
-              , quadChildren =
-                  ( Nothing
-                  , Nothing
-                  , Just $ LeafNode (Rect (V2 0 0) 50 50) $ Leaf (V2 10 10) 7
-                  , Nothing)
-              }
-      let treeWithOneInsertionResult = insert (Leaf (V2 10 10) 7) $ new frame
-      it "inserts a leaf" $
-        treeWithOneInsertionResult `shouldBe`
-        (True, expectedTreeWithOneInsertion)
-      let expectedTreeWithTwoInsertions :: QuadTree Int =
-            QuadNode $
-            Quad
-              { quadRegion = Rect (V2 0 0) 100 100
-              , quadRepresentative = Just $ Leaf (V2 10 10) 7
-              , quadChildren =
-                  ( Nothing
-                  , Nothing
-                  , Just $
-                    QuadNode $
-                    Quad
-                      { quadRegion = Rect (V2 0 0) 50 50
-                      , quadRepresentative = Just $ Leaf (V2 10 10) 7
-                      , quadChildren =
-                          ( Nothing
-                          , Just $
-                            LeafNode (Rect (V2 0 25) 25 25) (Leaf (V2 10 30) 12)
-                          , Just $
-                            LeafNode (Rect (V2 0 0) 25 25) (Leaf (V2 10 10) 7)
-                          , Nothing)
-                      }
-                  , Nothing)
-              }
-      let treeWithTwoInsertionsResult =
-            insert (Leaf (V2 10 30) 12) $ snd treeWithOneInsertionResult
-      it "inserts a leaf under leaf" $
-        treeWithTwoInsertionsResult `shouldBe`
-        (True, expectedTreeWithTwoInsertions)

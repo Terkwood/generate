@@ -10,6 +10,7 @@ import Control.Monad.Reader
 import Data.RVar
 import Data.Random.Distribution.Uniform
 import Linear
+import Test.Hspec
 
 import Generate
 
@@ -32,7 +33,11 @@ rectCenter :: Rect -> V2 Double
 rectCenter (Rect (V2 x y) w h) = V2 (x + w / 2) (y + h / 2)
 
 distanceToRect :: Rect -> V2 Double -> Double
-distanceToRect r@(Rect tl w h) p =
-  let p' = p + rectCenter r
-      d = abs p' - (V2 w h)
-   in norm d
+distanceToRect r@(Rect (V2 tlx tly) w h) (V2 x y) =
+  let xc1 = tlx + w
+      xc2 = tlx
+      yc1 = tly + h
+      yc2 = tly
+      xDist = max 0 $ max (x - xc1) (xc2 - x)
+      yDist = max 0 $ max (y - yc1) (yc2 - y)
+   in norm (V2 xDist yDist)
