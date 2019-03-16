@@ -1,5 +1,6 @@
 module Coord
   ( randomPoint
+  , randomPointIn
   , centerPoint
   , midpoint
   ) where
@@ -7,6 +8,7 @@ module Coord
 import Control.Monad.Reader
 import Data.RVar
 import Data.Random.Distribution.Uniform
+import Geom.Rect
 import Linear
 
 import Generate
@@ -18,6 +20,12 @@ randomPoint = do
   x <- sampleRVar $ uniform 0 1
   y <- sampleRVar $ uniform 0 1
   return $ V2 (x * width) (y * height)
+
+randomPointIn :: Rect -> Generate (V2 Double)
+randomPointIn (Rect (V2 tlx tly) w h) = do
+  x <- sampleRVar $ uniform 0 1
+  y <- sampleRVar $ uniform 0 1
+  return $ V2 (tlx + x * w) (tly + y * h)
 
 centerPoint :: Generate (V2 Double)
 centerPoint = do

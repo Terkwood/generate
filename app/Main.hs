@@ -33,19 +33,17 @@ data CircleSearch = CircleSearch
   { searchTree :: Q.QuadTree Circle
   , foundCircles :: [Circle]
   , remainingAttempts :: Int
+  , searchFrame :: Rect
   }
 
-mkSearch :: Int -> Generate CircleSearch
-mkSearch n = do
-  frame <- fullFrame
-  return $ CircleSearch (Q.new frame) [] n
+mkSearch :: Int -> Rect -> Generate CircleSearch
+mkSearch n frame = do
+  return $ CircleSearch (Q.new frame) [] n frame
 
-randomCircle :: Generate Circle
-randomCircle
-  --radius <- sampleRVar $ normal 20 5 >>= return . (+ 1) . abs
- = do
-  let radius = 15.0
-  center <- randomPoint
+randomCircle :: Rect -> Generate Circle
+randomCircle frame = do
+  let radius = 5.0
+  center <- randomPointIn frame
   return $ Circle center radius
 
 valid :: Q.QuadTree Circle -> Circle -> Bool
@@ -59,10 +57,10 @@ validNaive :: [Circle] -> Circle -> Bool
 validNaive found candidate = not $ any ((> 0) . (overlap candidate)) found
 
 search :: CircleSearch -> Generate (Maybe CircleSearch)
-search (CircleSearch _ _ 0) = return Nothing
-search s@(CircleSearch tree circles remaining) = do
+search (CircleSearch _ _ 0 _) = return Nothing
+search s@(CircleSearch tree circles remaining frame) = do
   let remaining' = remaining - 1
-  candidate@(Circle center _) <- randomCircle
+  candidate@(Circle center _) <- randomCircle frame
   if valid tree candidate
     then return $
          Just $
@@ -70,6 +68,7 @@ search s@(CircleSearch tree circles remaining) = do
            (snd $ Q.insert (Q.Leaf center candidate) tree)
            (candidate : circles)
            remaining'
+           frame
     else return $ Just $ s {remainingAttempts = remaining'}
 
 drawCircle :: Circle -> Generate (Render ())
@@ -83,8 +82,9 @@ drawCircle (Circle (V2 x y) r) = do
 scene :: Generate (Render ())
 scene = do
   World {..} <- asks world
-  frame <- fullFrame
-  circleSearch <- mkSearch 2000
+  let frame =
+        Rect (V2 (width / 5) (height / 5)) (width / 5 * 3) (height / 5 * 3)
+  circleSearch <- mkSearch 20000 frame
   circles <-
     iterateMaybeM (search) circleSearch >>= return . foundCircles . last
   draws <- sequence $ map (drawCircle) circles
@@ -95,18 +95,16 @@ scene = do
     foldr1 (>>) draws
     return ()
 
--- ["8ACEDA", "68BAD5", "373C40", "556173", "E7F5F5"]
 fgColour :: Generate (RGB Double)
 fgColour = do
   let palette =
         V.map (hexcolour) $
-        V.fromList $
-        ["0E6E79", "E9BB52", "1D5076", "0EC6B7", "FBF9F4", "DD985F", "D2344A"]
+        V.fromList $ ["68BAD5", "373C40", "556173", "E7F5F5"]
   i <- sampleRVar $ uniform 0 (V.length palette - 1)
   return $ palette V.! i
 
 bgColour :: RGB Double
-bgColour = hexcolour "F9E4AD"
+bgColour = hexcolour "8ACEDA"
 
 main :: IO ()
 main = runInvocation scene
