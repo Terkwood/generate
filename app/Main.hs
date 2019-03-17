@@ -5,6 +5,7 @@ import Control.Monad.Reader
 import Data.Colour.SRGB
 import Data.List
 import Data.Maybe
+import Data.Ord
 import Data.RVar
 import Data.Random.Distribution.Normal
 import Data.Random.Distribution.Uniform
@@ -36,19 +37,43 @@ data CircleSearch = CircleSearch
   , searchFrame :: Rect
   }
 
-mkSearch :: Int -> Rect -> Generate CircleSearch
-mkSearch n frame = do
-  return $ CircleSearch (Q.new frame) [] n frame
+mkSearch :: Int -> Rect -> CircleSearch
+mkSearch n frame =
+  CircleSearch (Q.new (representativeNodeUpdater) frame) [] n frame
+  where
+    leafRadius :: Q.Leaf Circle -> Double
+    leafRadius = (\(Circle _ r) -> r) . Q.leafTag
+    representativeNodeUpdater ::
+         Maybe (Q.Leaf Circle) -> Q.Leaf Circle -> Maybe (Q.Leaf Circle)
+    representativeNodeUpdater current new =
+      case current of
+        Just current -> Just $ maximumBy (comparing leafRadius) [new, current]
+        Nothing -> Just new
 
 randomCircle :: Rect -> Generate Circle
 randomCircle frame = do
-  let radius = 5.0
+  radius <- sampleRVar $ normal 3 2 >>= return . (+ 1) . abs
   center <- randomPointIn frame
   return $ Circle center radius
 
 valid :: Q.QuadTree Circle -> Circle -> Bool
 valid tree c@(Circle center _) =
-  let leaf = Q.nearest center tree
+  let heuristic :: Q.Heuristic Circle
+      heuristic =
+        Q.Heuristic
+          { heuristicDistance =
+              \(Q.Leaf _ c1) (Q.Leaf _ c2) -> negate $ overlap c1 c2
+          , heuristicFilter =
+              \(Q.Leaf _ best) (Q.Leaf p search@(Circle _ sr)) (Q.Quad _ reg rep _) ->
+                case rep of
+                  Just (Q.Leaf _ (Circle _ cr)) ->
+                    let distanceToRegion = distanceToRect reg p
+                        distanceToClosestPossible = distanceToRegion - cr - sr
+                     in distanceToClosestPossible <
+                        ((negate $ overlap best search) :: Double)
+                  Nothing -> False
+          }
+      leaf = Q.nearest heuristic (Q.Leaf center c) tree
    in case leaf of
         Just (Q.Leaf _ nearestCircle) -> not $ overlap c nearestCircle > 0
         Nothing -> True
@@ -76,7 +101,7 @@ drawCircle (Circle (V2 x y) r) = do
   colour <- fgColour
   return $ do
     arc x y r 0 (2 * pi)
-    setColour (colour, 0.5 :: Double)
+    setColour colour
     fill
 
 scene :: Generate (Render ())
@@ -84,7 +109,7 @@ scene = do
   World {..} <- asks world
   let frame =
         Rect (V2 (width / 5) (height / 5)) (width / 5 * 3) (height / 5 * 3)
-  circleSearch <- mkSearch 20000 frame
+  let circleSearch = mkSearch 20000 frame
   circles <-
     iterateMaybeM (search) circleSearch >>= return . foundCircles . last
   draws <- sequence $ map (drawCircle) circles
@@ -99,7 +124,7 @@ fgColour :: Generate (RGB Double)
 fgColour = do
   let palette =
         V.map (hexcolour) $
-        V.fromList $ ["68BAD5", "373C40", "556173", "E7F5F5"]
+        V.fromList $ ["68BAD5", "373C40", "556173", "E7F5F5", "31425e"]
   i <- sampleRVar $ uniform 0 (V.length palette - 1)
   return $ palette V.! i
 

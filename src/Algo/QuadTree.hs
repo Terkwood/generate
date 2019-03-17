@@ -2,6 +2,7 @@ module Algo.QuadTree
   ( QuadTree(..)
   , Quad(..)
   , Leaf(..)
+  , Heuristic(..)
   , new
   , insert
   , nearest
@@ -18,24 +19,38 @@ import Geom.Rect
 import Test.Hspec
 
 data QuadTree v
-  = LeafNode Rect
+  = LeafNode (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v))
+             Rect
              (Leaf v)
   | QuadNode (Quad v)
-  deriving (Eq, Show)
 
 data Leaf v = Leaf
   { leafPosition :: V2 Double
   , leafTag :: v
   } deriving (Eq, Show)
 
+data Heuristic v = Heuristic
+  {- Distance between leaves. -}
+  { heuristicDistance :: Leaf v -> Leaf v -> Double
+  {- Given the current best candidate leaf in search, determine whether the 
+     subtree is worth searching. Returning Nothing will fall back on region
+     heuristic. 
+  
+     Best -> SearchLeaf -> Candidate Quad -> Eligible?
+  
+  -}
+  , heuristicFilter :: Leaf v -> Leaf v -> Quad v -> Bool
+  }
+
 data Quad v = Quad
-  { quadRegion :: Rect
+  { quadRepUpdate :: Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)
+  , quadRegion :: Rect
   , quadRepresentative :: Maybe (Leaf v)
   , quadChildren :: ( Maybe (QuadTree v)
                     , Maybe (QuadTree v)
                     , Maybe (QuadTree v)
                     , Maybe (QuadTree v))
-  } deriving (Eq, Show)
+  }
 
 data Quadrant
   = Q1
@@ -45,8 +60,12 @@ data Quadrant
   deriving (Eq, Show)
 
 -- Returns a new QuadTree representing the given Rect.
-new :: Rect -> QuadTree v
-new rect = QuadNode $ newQuad rect
+new :: (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) -> Rect -> QuadTree v
+new repUpdate rect = QuadNode $ _newQuad repUpdate rect
+
+_newQuad :: (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) -> Rect -> Quad v
+_newQuad repUpdate rect =
+  Quad repUpdate rect Nothing (Nothing, Nothing, Nothing, Nothing)
 
 -- Returns (True, Tree with leaf inserted) if the leaf position is within
 -- the domain of the quadtree. Returns (False, Tree unchanged otherwise).
@@ -57,15 +76,15 @@ insert leaf@(Leaf position _) tree =
     else (False, tree)
 
 _region :: QuadTree v -> Rect
-_region (QuadNode (Quad reg _ _)) = reg
-_region (LeafNode reg _) = reg
+_region (QuadNode (Quad _ reg _ _)) = reg
+_region (LeafNode _ reg _) = reg
 
 _insert :: Leaf v -> QuadTree v -> QuadTree v
-_insert leaf@(Leaf p _) (QuadNode quad@(Quad reg _ _)) =
+_insert leaf@(Leaf p _) (QuadNode quad@(Quad ru reg _ _)) =
   let q = _quadrantOf reg p
    in QuadNode $ _updateChild quad leaf q
-_insert leaf@(Leaf p _) (LeafNode reg oldLeaf) =
-  let branch = new reg
+_insert leaf@(Leaf p _) (LeafNode ru reg oldLeaf) =
+  let branch = new ru reg
    in _insertMany [oldLeaf, leaf] branch
 
 _insertMany :: [Leaf v] -> QuadTree v -> QuadTree v
@@ -73,9 +92,9 @@ _insertMany (leaf:leaves) tree = _insertMany leaves $ _insert leaf tree
 _insertMany [] tree = tree
 
 _updateChild :: Quad v -> Leaf v -> Quadrant -> Quad v
-_updateChild (Quad reg rep (c1, c2, c3, c4)) leaf q =
+_updateChild (Quad ru reg rep (c1, c2, c3, c4)) leaf q =
   let subRegion = _subRegion reg q
-      fallback = LeafNode subRegion leaf
+      fallback = LeafNode ru subRegion leaf
       (constructor, child) =
         case q of
           Q1 -> (\c -> (c, c2, c3, c4), c1)
@@ -83,8 +102,8 @@ _updateChild (Quad reg rep (c1, c2, c3, c4)) leaf q =
           Q3 -> (\c -> (c1, c2, c, c4), c3)
           Q4 -> (\c -> (c1, c2, c3, c), c4)
       child' = fromMaybe fallback $ fmap (_insert leaf) child
-      rep' = fromMaybe leaf rep
-   in Quad reg (Just rep') $ constructor $ Just child'
+      rep' = ru rep leaf
+   in Quad ru reg rep' $ constructor $ Just child'
 
 _subRegion :: Rect -> Quadrant -> Rect
 _subRegion (Rect (V2 tlx tly) w h) q =
@@ -105,14 +124,27 @@ _quadrantOf r (V2 x y) =
                then Q2
                else Q3
 
--- Returns the nearest point in the QuadTree to the given point.
-nearest :: V2 Double -> QuadTree v -> Maybe (Leaf v)
-nearest p tree = _nearest (_treeLeaf tree) p $ V.fromList [tree]
+-- Returns the nearest point in the QuadTree to the given leaf.
+-- Uses the provided distance function.
+nearest :: Heuristic v -> Leaf v -> QuadTree v -> Maybe (Leaf v)
+nearest heuristic p tree =
+  _nearest heuristic (_treeLeaf tree) p $ V.fromList [tree]
 
 _nearest ::
-     (Maybe (Leaf v)) -> V2 Double -> V.Vector (QuadTree v) -> Maybe (Leaf v)
-_nearest best p trees =
-  let treesWithLeaves = V.filter (isJust . _treeLeaf) trees
+     Heuristic v
+  -> (Maybe (Leaf v))
+  -> Leaf v
+  -> V.Vector (QuadTree v)
+  -> Maybe (Leaf v)
+_nearest h@(Heuristic distanceF eligibleF) best searchLeaf trees =
+  let treesWithChildren =
+        V.mapMaybe
+          (\tree ->
+             case tree of
+               QuadNode quad -> Just quad
+               _ -> Nothing)
+          trees
+      treesWithLeaves = V.filter (isJust . _treeLeaf) trees
       candidateLeaves = V.mapMaybe (_treeLeaf) treesWithLeaves
       candidateLeaves' =
         case best of
@@ -121,48 +153,33 @@ _nearest best p trees =
       best' =
         if V.null candidateLeaves'
           then Nothing
-          else Just $ V.minimumBy (comparing (_leafDistance p)) candidateLeaves'
+          else Just $
+               V.minimumBy (comparing $ distanceF searchLeaf) candidateLeaves'
    in case best' of
         Nothing -> Nothing
         Just best' ->
-          let eligible = V.filter (_eligible p best') treesWithLeaves
+          let eligible = V.filter (eligibleF best' searchLeaf) treesWithChildren
               next = V.concatMap (_nextLevel) eligible
            in if V.null next
                 then Just best'
-                else _nearest (Just best') p next
+                else _nearest h (Just best') searchLeaf next
 
 _treeLeaf :: QuadTree v -> Maybe (Leaf v)
-_treeLeaf (QuadNode (Quad _ rep _)) = rep
-_treeLeaf (LeafNode _ leaf) = Just leaf
-
-_leafDistance :: V2 Double -> Leaf v -> Double
-_leafDistance p c1@(Leaf p1 _) = distance p p1
+_treeLeaf (QuadNode (Quad _ _ rep _)) = rep
+_treeLeaf (LeafNode _ _ leaf) = Just leaf
 
 -- Returns True iff the QuadTree contains no points.
 empty :: QuadTree v -> Bool
-empty (QuadNode (Quad _ rep _)) = isNothing rep
-empty (LeafNode _ _) = False
+empty (QuadNode (Quad _ _ rep _)) = isNothing rep
+empty (LeafNode _ _ _) = False
 
--- A tree is still eligible for search (as in, may contain a closer leaf than
--- the one given) if its region is closer to the point than the given leaf
--- leaf point and it contains at least one point.
-_eligible :: V2 Double -> Leaf v -> QuadTree v -> Bool
-_eligible p (Leaf leafPos _) tree =
-  case _distanceToNode p tree of
-    Just dist -> dist <= distance p leafPos
-    Nothing -> False
-
-_nextLevel :: QuadTree v -> V.Vector (QuadTree v)
-_nextLevel (QuadNode (Quad _ _ (c1, c2, c3, c4))) =
+_nextLevel :: Quad v -> V.Vector (QuadTree v)
+_nextLevel (Quad _ _ _ (c1, c2, c3, c4)) =
   V.fromList $ catMaybes [c1, c2, c3, c4]
-_nextLevel (LeafNode _ (Leaf _ _)) = V.empty
 
 _distanceToNode :: V2 Double -> QuadTree v -> Maybe (Double)
-_distanceToNode p (QuadNode (Quad rect rep _)) =
+_distanceToNode p (QuadNode (Quad _ reg rep _)) =
   case rep of
-    Just _ -> Just $ distanceToRect rect p
+    Just _ -> Just $ distanceToRect reg p
     Nothing -> Nothing
-_distanceToNode p (LeafNode _ (Leaf leaf _)) = Just $ distance p leaf
-
-newQuad :: Rect -> Quad v
-newQuad rect = Quad rect Nothing (Nothing, Nothing, Nothing, Nothing)
+_distanceToNode p (LeafNode _ _ (Leaf leaf _)) = Just $ distance p leaf
