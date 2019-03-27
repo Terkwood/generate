@@ -5,6 +5,7 @@ module Algo.QuadTree
   , Heuristic(..)
   , new
   , insert
+  , insertMany
   , nearest
   , empty
   ) where
@@ -85,11 +86,11 @@ _insert leaf@(Leaf p _) (QuadNode quad@(Quad ru reg _ _)) =
    in QuadNode $ _updateChild quad leaf q
 _insert leaf@(Leaf p _) (LeafNode ru reg oldLeaf) =
   let branch = new ru reg
-   in _insertMany [oldLeaf, leaf] branch
+   in insertMany [oldLeaf, leaf] branch
 
-_insertMany :: [Leaf v] -> QuadTree v -> QuadTree v
-_insertMany (leaf:leaves) tree = _insertMany leaves $ _insert leaf tree
-_insertMany [] tree = tree
+insertMany :: [Leaf v] -> QuadTree v -> QuadTree v
+insertMany [] tree = tree
+insertMany (leaf:remaining) tree = insertMany remaining $ _insert leaf tree
 
 _updateChild :: Quad v -> Leaf v -> Quadrant -> Quad v
 _updateChild (Quad ru reg rep (c1, c2, c3, c4)) leaf q =

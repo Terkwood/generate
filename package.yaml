@@ -54,6 +54,7 @@ dependencies:
 - linear-accelerate
 - gloss-raster-accelerate
 - hspec
+- utility-ht
 
 
 default-extensions:

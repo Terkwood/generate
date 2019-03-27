@@ -8,17 +8,26 @@ module Geom.Rect
 
 import Control.Monad.Reader
 import Data.RVar
+import Data.RVar
+import Data.Random.Distribution.Uniform
 import Data.Random.Distribution.Uniform
 import Linear
 import Test.Hspec
 
 import Generate
+import Patterns.Sampling
 
 data Rect = Rect
   { topLeft :: V2 Double
   , rectWidth :: Double
   , rectHeight :: Double
   } deriving (Eq, Show)
+
+instance Sample Rect where
+  spatialSample (Rect (V2 tlx tly) w h) = do
+    x <- sampleRVar $ uniform 0 1
+    y <- sampleRVar $ uniform 0 1
+    return $ V2 (tlx + x * w) (tly + y * h)
 
 fullFrame :: Generate Rect
 fullFrame = do
