@@ -30,7 +30,6 @@ drawLine :: V.Vector (V2 Double) -> Generate (Render ())
 drawLine points = do
   colour <- fgColour
   width <- sampleRVar $ uniform 3 7
-  fillMode :: Int <- sampleRVar $ uniform 0 1
   let (V2 x y) = V.head points
   let steps :: V.Vector (Render ()) =
         V.map (\(V2 x y) -> lineTo x y) $ V.tail points
@@ -41,9 +40,7 @@ drawLine points = do
     moveTo x y
     V.foldr1 (>>) steps
     closePath
-    if fillMode == 1
-      then fill
-      else stroke
+    fill
 
 drawCircle :: Circle -> Generate (Render ())
 drawCircle (Circle (V2 x y) r) = do
@@ -163,7 +160,7 @@ randomNgon = do
   phase <- sampleRVar $ uniform 0 (2 * pi)
   let interval = 2 * pi / fromIntegral n
   let point i = circumPoint center (phase + interval * fromIntegral i) r
-  return $ Ngon (V.generate n point) (Circle center (r * 2))
+  return $ Ngon (V.generate n point) (Circle center (r * 1.6))
 
 data Memphis =
   forall m. (Collidable m, Drawable m) =>
