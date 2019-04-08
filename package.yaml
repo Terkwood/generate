@@ -36,6 +36,7 @@ dependencies:
 - linear
 - lens
 - splines
+- smoothie
 - Noise
 - split
 - hashtables
@@ -45,16 +46,10 @@ dependencies:
 - monad-extras
 - random
 - random-shuffle
-- accelerate
-- accelerate-llvm-native
-- accelerate-llvm-ptx
-- accelerate-io
 - llvm-hs
-- colour-accelerate
-- linear-accelerate
-- gloss-raster-accelerate
 - hspec
 - utility-ht
+- vector-algorithms
 
 
 default-extensions:

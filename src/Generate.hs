@@ -104,18 +104,12 @@ seedToFile path job = do
   let seed' = seed $ renderCtx 0
   let (w, h) = renderDimensions
   let writeFrame i = do
-        frameSurface <- getRenderedFrame job i
-        withImageSurface FormatARGB32 w h $ \surface -> do
-          renderWith surface $ do
-            setSourceRGBA 0 0 0 1
-            Cairo.rectangle 0 0 (fromIntegral w) (fromIntegral h)
-            fill
-            setSourceSurface frameSurface 0 0
-            Cairo.rectangle 0 0 (fromIntegral w) (fromIntegral h)
-            fill
-          surfaceWriteToPNG
-            surface
-            (path ++ "__" ++ (show seed') ++ "__" ++ (show i) ++ ".png")
+        let filePath =
+              path ++ "__" ++ (show seed') ++ "__" ++ (show i) ++ ".png"
+        layers <- getRender job i
+        surface <- createImageSurface FormatARGB32 w h
+        render (spec job) layers i surface
+        surfaceWriteToPNG surface filePath
   sequence $ map (writeFrame) [0 .. renderEndFrame - 1]
   return ()
 
@@ -142,6 +136,7 @@ ui ::
 ui frameRef jobRef renderFactory (Key {eventKeyVal, ..}) = do
   case eventKeyVal of
     65307 -> mainQuit
+    65507 -> mainQuit
     114 -> do
       modifyIORef frameRef (const 0)
       newSeed <- timeSeed

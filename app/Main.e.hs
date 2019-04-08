@@ -240,7 +240,7 @@ borderColour :: RGB Double
 borderColour = hexcolour "F7F0DE"
 
 bgColour :: RGB Double
-bgColour = hexcolour "F9E4AD" --"F7F0DE"
+bgColour = hexcolour "DBC0B3" --"F7F0DE"
 
 linePalette :: V.Vector String
 linePalette = V.fromList ["53363B", "A7707A", "B9B886", "556A4A"] --V.fromList ["26343C", "313744", "83B1AB", "C5B08C"]

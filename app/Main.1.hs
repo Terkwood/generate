@@ -109,61 +109,27 @@ alphaMatte matte src = do
   matte
   withGroupPattern mask
 
-data Sweep = Sweep
-  { sweepPos :: V2 Double
-  , sweepAmplitude :: Double
-  , sweepFrequency :: Double
-  , sweepDots :: Int
-  , sweepVariance :: Double
-  , sweepHeight :: Double
-  }
-
---drawDot :: V2 Double -> Render ()
---drawDot p = drawCircle $ Circle p 0.5
-drawDot :: V2 Double -> Generate (Render ())
-drawDot (V2 x y) = do
-  World {..} <- asks world
-  return $ do
-    setLineWidth $ 0.4
-    moveTo x y
-    lineTo (x + (1.0 / scaleFactor)) y
-    closePath
-    stroke
-
-drawSweep :: Sweep -> Generate (Render ())
-drawSweep (Sweep (V2 x y) amp freq dots _ height) = do
-  let phase = freq / fromIntegral dots
-  let ys =
-        V.generate dots $ \i ->
-          y + (negate 1) * abs (amp * sin (fromIntegral i / height * freq))
-  let ps = V.map (V2 x) ys
-  dotDraws <- V.sequence $ V.map (drawDot) ps
-  return $ V.foldr1 (>>) dotDraws
-
-stepSweep :: Sweep -> Generate (Maybe Sweep)
-stepSweep sweep@(Sweep (V2 x y) _ freq _ variance _) = do
-  World {..} <- asks world
-  let freqVariance = variance / scaleFactor
-  freqDelta <- (sampleRVar $ uniform (negate freqVariance) freqVariance)
-  let freq' = 0.1 * (clamp $ (freq + freqDelta) / 0.1)
-  if x > width
-    then return Nothing
-    else return $
-         Just
-           sweep
-             {sweepPos = V2 (x + 1.0 / scaleFactor) y, sweepFrequency = freq'}
-
-sweep :: Double -> Double -> Double -> Generate (Render ())
-sweep amp variance height = do
-  World {..} <- asks world
-  let xs = floor $ width * scaleFactor
-  sweeps <-
-    iterateMaybeM stepSweep (Sweep (V2 0 height) amp 0.001 400 variance height)
-  sweepDraws <- sequence $ map (drawSweep) $ take xs sweeps
-  c <- fgColour
-  return $ do
-    setColour (c, 0.2 :: Double)
-    foldr1 (>>) sweepDraws
+sandStroke :: THColors -> Line -> Generate (Render ())
+sandStroke thcol line = do
+  let count = 1
+  let strength = 5
+  let strengths = V.map (* strength) $ ramp count
+  let dots = 15000
+  let dotSize = 0.3
+  let dotSpread = dotSize * 20.3
+  let vertices = toVertices line
+  let dotter samplePoint point = do
+        radius <- sampleRVar $ normal 0 dotSpread >>= return . abs
+        let sampleSpace = Circle point radius
+        dotPoint <- spatialSample sampleSpace
+        colour <- assignTHColor thcol dotPoint
+        return $ do
+          setColour colour
+          drawCircle $ Circle dotPoint dotSize
+  lines <- V.sequence $ V.map (warp line) strengths
+  let splines = V.map (mkSpline2d 5) lines
+  draws <- V.sequence $ V.map (drawSpline dots dotter) splines
+  return $ V.foldr1 (>>) draws
 
 solidLayer :: RGB Double -> Generate (Render ())
 solidLayer colour = do
@@ -179,33 +145,27 @@ scene = do
   World {..} <- asks world
   frame <- fullFrame
   bg <- solidLayer bgColour
-  hillCount <- sampleRVar $ uniform 4 30
-  heights <-
-    V.sequence $ V.generate hillCount $ const $ sampleRVar $ uniform 100 40000
-  amplitudes <-
-    V.sequence $ V.map (const $ sampleRVar $ uniform 10000.0 800000.0) heights
-  frequencies <-
-    V.sequence $ V.map (const $ sampleRVar $ uniform 0.000002 0.000005) heights
-  brooms <-
-    V.sequence $
-    V.map (\(height, amp, freq) -> sweep amp freq height) $
-    V.zip3 heights amplitudes frequencies
+  rows <- sampleRVar $ uniform 2 20
+  cols <- sampleRVar $ uniform 2 20
+  lines <- maze gridCfgDefault {rows = rows, cols = cols}
+  thcol <-
+    mkTHColors $
+    V.map (hexcolour) $ V.fromList ["987FA1", "5E527D", "20263D", "6A6169"]
+  draws <- sequence $ map (sandStroke thcol . subdivideN 3) lines
   return $ do
     setAntialias AntialiasBest
     bg
-    foldr1 (>>) brooms
+    foldr1 (>>) draws
     return ()
 
 fgColour :: Generate (RGB Double)
 fgColour = do
-  let palette =
-        V.map (hexcolour) $
-        V.fromList $ ["0C1B20", "065275", "328197", "25445D", "77D0E4"]
+  let palette = V.map (hexcolour) $ V.fromList $ []
   i <- sampleRVar $ uniform 0 (V.length palette - 1)
   return $ palette V.! i
 
 bgColour :: RGB Double
-bgColour = hexcolour "F6F9F5" --"ffffff"
+bgColour = hexcolour "ACA2C1" --"ffffff"
 
 main :: IO ()
 main = runInvocation scene

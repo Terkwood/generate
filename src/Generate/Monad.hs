@@ -6,13 +6,17 @@ module Generate.Monad
   , World(..)
   , noiseSample
   , runRand
+  , randElem
   , scaledDimensions
   ) where
 
 import Control.Monad.Reader
 import Control.Monad.State as State
 import Data.Maybe
+import Data.RVar
+import Data.Random.Distribution.Uniform
 import Data.Random.Source.PureMT
+import qualified Data.Vector as V
 import Graphics.Rendering.Cairo
 import Linear
 import Math.Noise
@@ -47,6 +51,11 @@ runGenerate ctx rng scene =
   (flip runReader ctx) . (>>= (return . fst)) . (flip runStateT rng) $ scene
 
 type Random a = State PureMT a
+
+randElem :: V.Vector a -> Generate a
+randElem as = do
+  i <- sampleRVar $ uniform 0 $ V.length as - 1
+  return $ as V.! i
 
 runRand :: Random a -> Generate a
 runRand rand = do

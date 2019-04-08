@@ -10,7 +10,6 @@ import Control.Monad.Reader
 import Data.RVar
 import Data.RVar
 import Data.Random.Distribution.Uniform
-import Data.Random.Distribution.Uniform
 import Linear
 import Test.Hspec
 

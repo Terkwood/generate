@@ -8,6 +8,7 @@ module Algo.QuadTree
   , insertMany
   , nearest
   , empty
+  , defaultNodeUpdater
   ) where
 
 import Linear
@@ -59,6 +60,10 @@ data Quadrant
   | Q3
   | Q4
   deriving (Eq, Show)
+
+defaultNodeUpdater :: Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)
+defaultNodeUpdater v@(Just _) _ = v
+defaultNodeUpdater Nothing v = Just v
 
 -- Returns a new QuadTree representing the given Rect.
 new :: (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) -> Rect -> QuadTree v
