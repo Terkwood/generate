@@ -8,13 +8,19 @@ module Generate.Geom.Circle
 import Data.RVar
 import Data.Random.Distribution.Uniform
 import Data.Random.Distribution.Uniform
+import Graphics.Rendering.Cairo
 import Linear
 
+import Generate.Draw
 import Generate.Patterns.Sampling
 
 data Circle =
   Circle (V2 Double)
          Double
+
+instance Drawable Circle where
+  draw (Circle (V2 x y) r) = do
+    arc x y r 0 (2 * pi)
 
 instance Sample Circle where
   spatialSample (Circle p r) = do

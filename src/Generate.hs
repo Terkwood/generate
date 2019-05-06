@@ -12,8 +12,11 @@ module Generate
   , module Math.Noise
   , module Generate.Colour
   , module Generate.Coord
+  , module Generate.Draw
+  , module Generate.Geom
   , module Generate.Geom.Circle
   , module Generate.Geom.Rect
+  , module Generate.Geom.Line
   , module Generate.Monad
   , module Generate.Runner
   ) where
@@ -29,7 +32,10 @@ import Data.Random.Distribution.Normal
 import Data.Random.Distribution.Uniform
 import Generate.Colour
 import Generate.Coord
+import Generate.Draw
+import Generate.Geom
 import Generate.Geom.Circle
+import Generate.Geom.Line
 import Generate.Geom.Rect
 import Generate.Monad
 import Generate.Runner

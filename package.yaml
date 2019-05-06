@@ -72,6 +72,7 @@ default-extensions:
 - FlexibleContexts
 - ViewPatterns
 - MultiParamTypeClasses
+- TypeFamilies
 
 
 library:

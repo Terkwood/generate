@@ -7,6 +7,7 @@ module Generate.Monad
   , noiseSample
   , runRand
   , randElem
+  , randElemStable
   , scaledDimensions
   ) where
 
@@ -52,10 +53,19 @@ runGenerate ctx rng scene =
 
 type Random a = State PureMT a
 
+-- Chooses a random element from a vector.
 randElem :: V.Vector a -> Generate a
 randElem as = do
   i <- sampleRVar $ uniform 0 $ V.length as - 1
   return $ as V.! i
+
+-- Chooses the same random element from a vector every invocation
+-- for a given seed.
+randElemStable :: V.Vector a -> Generate a
+randElemStable vs = do
+  seed_ <- asks seed
+  let i = seed_ `mod` (V.length vs)
+  return $ vs V.! i
 
 runRand :: Random a -> Generate a
 runRand rand = do

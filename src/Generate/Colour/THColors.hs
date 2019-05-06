@@ -1,4 +1,4 @@
-module Generate.Patterns.THColors
+module Generate.Colour.THColors
   ( THColors
   , mkTHColors
   , assignTHColor
