@@ -1,4 +1,4 @@
-module Geom
+module Generate.Geom
   ( Poly(..)
   , Subdivisible(..)
   ) where

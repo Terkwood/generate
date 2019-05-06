@@ -1,4 +1,4 @@
-module Patterns.Sampling
+module Generate.Patterns.Sampling
   ( Sample(..)
   ) where
 

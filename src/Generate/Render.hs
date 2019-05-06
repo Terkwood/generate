@@ -106,8 +106,8 @@ render :: RenderSpec a -> Generate (Render ()) -> Int -> Surface -> IO ()
 render RenderSpec {..} layers frame surface = do
   let ctx = renderCtx frame
   renderWith surface $ do
-    scale (scaleFactor (world ctx)) (scaleFactor (world ctx))
     setAntialias AntialiasBest
+    scale (scaleFactor (world ctx)) (scaleFactor (world ctx))
     setSourceRGBA 0 0 0 1
     rectangle 0 0 500 500
     fill

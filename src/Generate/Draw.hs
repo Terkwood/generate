@@ -1,4 +1,4 @@
-module Draw
+module Generate.Draw
   ( Drawable(..)
   ) where
 

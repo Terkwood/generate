@@ -1,4 +1,4 @@
-module Geom.Circle
+module Generate.Geom.Circle
   ( Circle(..)
   , circumPoint
   , circumPhase
@@ -10,7 +10,7 @@ import Data.Random.Distribution.Uniform
 import Data.Random.Distribution.Uniform
 import Linear
 
-import Patterns.Sampling
+import Generate.Patterns.Sampling
 
 data Circle =
   Circle (V2 Double)

@@ -1,4 +1,4 @@
-module Patterns.Grid
+module Generate.Patterns.Grid
   ( GridCfg(..)
   , TileFocus(..)
   , grid
@@ -14,8 +14,8 @@ import Data.Maybe
 import qualified Data.Vector as V
 import Linear
 
-import Generate
-import Geom.Rect
+import Generate.Geom.Rect
+import Generate.Monad
 
 data TileFocus
   = Center

@@ -1,4 +1,4 @@
-module Geom.Line
+module Generate.Geom.Line
   ( Line
   , mkLine
   , linePath
@@ -8,9 +8,8 @@ import qualified Data.Vector as V
 import Graphics.Rendering.Cairo as Cairo
 import Linear
 
-import Geom
-
-import Coord
+import Generate.Coord
+import Generate.Geom
 
 data Line =
   Line (V.Vector (V2 Double))

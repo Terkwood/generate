@@ -1,4 +1,4 @@
-module Patterns.Maze
+module Generate.Patterns.Maze
   ( maze
   ) where
 
@@ -9,9 +9,9 @@ import Data.Random.Distribution.Uniform
 import qualified Data.Vector as V
 import Linear
 
+import Generate.Geom.Line
 import Generate.Monad
-import Geom.Line
-import Patterns.Grid
+import Generate.Patterns.Grid
 
 maze :: GridCfg -> Generate [Line]
 maze cfg = do

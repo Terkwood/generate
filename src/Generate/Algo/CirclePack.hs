@@ -1,4 +1,4 @@
-module Algo.CirclePack
+module Generate.Algo.CirclePack
   ( CircleSearch(..)
   , search
   , mkSearch
@@ -8,10 +8,10 @@ module Algo.CirclePack
 import Data.List
 import Data.Ord
 
-import qualified Algo.QuadTree as Q
+import qualified Generate.Algo.QuadTree as Q
+import Generate.Geom.Circle
+import Generate.Geom.Rect
 import Generate.Monad
-import Geom.Circle
-import Geom.Rect
 
 data CircleSearch = CircleSearch
   { circleSearchTree :: Q.QuadTree Circle

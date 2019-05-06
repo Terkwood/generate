@@ -1,4 +1,4 @@
-module Coord
+module Generate.Coord
   ( randomPoint
   , centerPoint
   , midpoint
@@ -8,12 +8,10 @@ module Coord
 import Control.Monad.Reader
 import Data.RVar
 import Data.Random.Distribution.Uniform
-import Geom.Circle
-import Geom.Rect
-import Linear
-
-import Generate
+import Generate.Geom.Circle
+import Generate.Geom.Rect
 import Generate.Monad
+import Linear
 
 randomPoint :: Generate (V2 Double)
 randomPoint = do

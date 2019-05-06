@@ -1,4 +1,4 @@
-module Geom.Rect
+module Generate.Geom.Rect
   ( Rect(..)
   , fullFrame
   , rectCenter
@@ -13,8 +13,8 @@ import Data.Random.Distribution.Uniform
 import Linear
 import Test.Hspec
 
-import Generate
-import Patterns.Sampling
+import Generate.Monad
+import Generate.Patterns.Sampling
 
 data Rect = Rect
   { topLeft :: V2 Double

@@ -1,4 +1,4 @@
-module Patterns.THColors
+module Generate.Patterns.THColors
   ( THColors
   , mkTHColors
   , assignTHColor
@@ -13,10 +13,10 @@ import qualified Data.Vector.Algorithms.Insertion as VI
 import qualified Data.Vector.Unboxed as VU
 import Linear
 
-import qualified Algo.QuadTree as Q
+import qualified Generate.Algo.QuadTree as Q
+import Generate.Geom.Rect
 import Generate.Monad
-import Geom.Rect
-import Patterns.Sampling
+import Generate.Patterns.Sampling
 
 data THColors = THColors
   { huePoints :: V.Vector (V2 Double, Double)

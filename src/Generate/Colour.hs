@@ -1,4 +1,4 @@
-module Colour
+module Generate.Colour
   ( CairoColour(..)
   , RadialRamp(..)
   , LinearRamp(..)

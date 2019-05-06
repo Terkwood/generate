@@ -1,211 +1,282 @@
 module Main where
 
-import Control.Monad.Extra
-import Control.Monad.Reader
-import Data.Colour.SRGB
-import Data.List
-import Data.Maybe
-import Data.Ord
-import Data.RVar
-import Data.Random.Distribution.Normal
-import Data.Random.Distribution.Uniform
-import Data.Tuple.HT
 import qualified Data.Vector as V
-import Graphics.Rendering.Cairo as Cairo
-import Linear
-import Math.Noise
-import Math.Spline
-import Math.Spline.BSpline
+import Linear hiding (rotate)
 import System.IO.Unsafe
 
-import Algo.CirclePack
-import qualified Algo.QuadTree as Q
-import Colour
-import Coord
 import Generate
-import Geom
-import Geom.Circle
-import Geom.Line
-import Geom.Rect
-import Patterns.Grid
-import Patterns.Maze
-import Patterns.Sampling
-import Patterns.THColors
+import qualified Generate.Algo.QuadTree as Q
+import qualified Generate.Algo.Vec as V
+import Generate.Patterns.Sampling
 
-ramp :: Int -> V.Vector Double
-ramp n = V.generate n $ \i -> fromIntegral i / fromIntegral n
-
-arcRamp :: Int -> V.Vector Double
-arcRamp n = V.map (\v -> sin $ v * pi) $ ramp n
-
-extendedRamp :: Int -> Int -> V.Vector Double
-extendedRamp degree n = V.concat [start, ramp n, end]
-  where
-    start = V.generate degree $ const 0.0
-    end = V.generate degree $ const 1.0
-
-clamp :: Double -> Double
-clamp t =
-  if t > 1.0
-    then 1.0
-    else if t < 0.0
-           then 0.0
-           else t
-
-data Spline2d = Spline2d
-  { xSpline :: BSpline V.Vector Double
-  , ySpline :: BSpline V.Vector Double
+data CircleSearch = CircleSearch
+  { searchTree :: Q.QuadTree Circle
+  , foundCircles :: [Circle]
+  , remainingAttempts :: Int
+  , searchFrame :: Rect
   }
 
-mkSpline2d :: Int -> Line -> Spline2d
-mkSpline2d degree line = Spline2d xSpline ySpline
+mkSearch :: Int -> Rect -> CircleSearch
+mkSearch n frame =
+  CircleSearch (Q.new (representativeNodeUpdater) frame) [] n frame
   where
-    verts = toVertices line
-    n = V.length verts
-    knots = mkKnots $ V.toList $ extendedRamp degree n
-    xSpline = bSpline knots $ V.map (\(V2 x _) -> x) verts
-    ySpline = bSpline knots $ V.map (\(V2 _ y) -> y) verts
+    leafRadius :: Q.Leaf Circle -> Double
+    leafRadius = (\(Circle _ r) -> r) . Q.leafTag
+    representativeNodeUpdater ::
+         Maybe (Q.Leaf Circle) -> Q.Leaf Circle -> Maybe (Q.Leaf Circle)
+    representativeNodeUpdater current new =
+      case current of
+        Just current -> Just $ maximumBy (comparing leafRadius) [new, current]
+        Nothing -> Just new
 
-sample :: Spline2d -> Double -> V2 Double
-sample (Spline2d xSpline ySpline) t = V2 x y
-  where
-    x = evalBSpline xSpline t
-    y = evalBSpline ySpline t
+randomCircle :: Sample s => s -> Generate Circle
+randomCircle space = do
+  radius <- sampleRVar $ normal 2 2 >>= return . (+ 1) . abs
+  center <- spatialSample space
+  return $ Circle center radius
 
-wigglePoint :: Double -> V2 Double -> Generate (V2 Double)
-wigglePoint strength p = do
-  offset <- sampleRVar $ normal 0 $ sqrt strength
-  theta <- sampleRVar $ uniform 0 (2 * pi)
-  return $ circumPoint p theta offset
+heuristic :: Q.Heuristic Circle
+heuristic =
+  Q.Heuristic
+    { heuristicDistance = \(Q.Leaf _ c1) (Q.Leaf _ c2) -> negate $ overlap c1 c2
+    , heuristicFilter =
+        \(Q.Leaf _ best) (Q.Leaf p search@(Circle _ sr)) (Q.Quad _ reg rep _) ->
+          case rep of
+            Just (Q.Leaf _ (Circle _ cr)) ->
+              let distanceToRegion = distanceToRect reg p
+                  distanceToClosestPossible = distanceToRegion - cr - sr
+               in distanceToClosestPossible <
+                  ((negate $ overlap best search) :: Double)
+            Nothing -> False
+    }
 
-warp :: Line -> Double -> Generate Line
-warp line strength =
-  (V.sequence $ V.map (wigglePoint strength) $ toVertices line) >>=
-  return . fromJust . mkLine
+valid :: Q.QuadTree Circle -> Circle -> Bool
+valid tree c@(Circle center _) =
+  let leaf = Q.nearest heuristic (Q.Leaf center c) tree
+   in case leaf of
+        Just (Q.Leaf _ nearestCircle) -> not $ overlap c nearestCircle > 0
+        Nothing -> True
 
-drawCircle :: Circle -> Render ()
+search :: CircleSearch -> Generate (Maybe CircleSearch)
+search (CircleSearch _ _ 0 _) = return Nothing
+search s@(CircleSearch tree circles remaining frame) = do
+  let remaining' = remaining - 1
+  candidate@(Circle center _) <- randomCircle frame
+  if valid tree candidate
+    then return $
+         Just $
+         CircleSearch
+           (snd $ Q.insert (Q.Leaf center candidate) tree)
+           (candidate : circles)
+           remaining'
+           frame
+    else return $ Just $ s {remainingAttempts = remaining'}
+
+drawCircle :: Circle -> Generate (Render ())
 drawCircle (Circle (V2 x y) r) = do
-  arc x y r 0 (2 * pi)
-  fill
-
-drawSpline ::
-     Int
-  -> (Double -> V2 Double -> Generate (Render ()))
-  -> Spline2d
-  -> Generate (Render ())
-drawSpline n dotter spline =
-  let samplePoints = ramp n
-      samples = V.map (sample spline) samplePoints
-   in do dots <-
-           V.sequence $ V.map (uncurry dotter) $ V.zip samplePoints samples
-         return $ V.foldr1 (>>) dots
-
-alphaMatte :: Render () -> Render () -> Render ()
-alphaMatte matte src = do
-  pushGroup
-  src
-  popGroupToSource
-  pushGroup
-  matte
-  withGroupPattern mask
-
-data Sweep = Sweep
-  { sweepPos :: V2 Double
-  , sweepAmplitude :: Double
-  , sweepFrequency :: Double
-  , sweepDots :: Int
-  , sweepVariance :: Double
-  , sweepHeight :: Double
-  }
-
---drawDot :: V2 Double -> Render ()
---drawDot p = drawCircle $ Circle p 0.5
-drawDot :: V2 Double -> Generate (Render ())
-drawDot (V2 x y) = do
-  World {..} <- asks world
+  colour <- fgColour
   return $ do
-    setLineWidth $ 0.4
-    moveTo x y
-    lineTo (x + (1.0 / scaleFactor)) y
-    closePath
-    stroke
+    arc x y r 0 (2 * pi)
+    setColour colour
+    fill
 
-drawSweep :: Sweep -> Generate (Render ())
-drawSweep (Sweep (V2 x y) amp freq dots _ height) = do
-  let phase = freq / fromIntegral dots
-  let ys =
-        V.generate dots $ \i ->
-          y + (negate 1) * abs (amp * sin (fromIntegral i / height * freq))
-  let ps = V.map (V2 x) ys
-  dotDraws <- V.sequence $ V.map (drawDot) ps
-  return $ V.foldr1 (>>) dotDraws
+drawPath :: V.Vector (V2 Double) -> Render ()
+drawPath points = do
+  let (V2 sx sy) = V.head points
+  moveTo sx sy
+  V.foldr1 (>>) $ V.map (\(V2 x y) -> lineTo x y) $ V.tail points
 
-stepSweep :: Sweep -> Generate (Maybe Sweep)
-stepSweep sweep@(Sweep (V2 x y) _ freq _ variance _) = do
-  World {..} <- asks world
-  let freqVariance = variance / scaleFactor
-  freqDelta <- (sampleRVar $ uniform (negate freqVariance) freqVariance)
-  let freq' = 0.1 * (clamp $ (freq + freqDelta) / 0.1)
-  if x > width
-    then return Nothing
-    else return $
-         Just
-           sweep
-             {sweepPos = V2 (x + 1.0 / scaleFactor) y, sweepFrequency = freq'}
+estimateCircle :: Int -> Circle -> V.Vector (V2 Double)
+estimateCircle res (Circle c r) =
+  V.generate res $ \i ->
+    let theta = (fromIntegral i / fromIntegral res) * 2 * pi
+     in circumPoint c theta r
 
-sweep :: Double -> Double -> Double -> Generate (Render ())
-sweep amp variance height = do
-  World {..} <- asks world
-  let xs = floor $ width * scaleFactor
-  sweeps <-
-    iterateMaybeM stepSweep (Sweep (V2 0 height) amp 0.001 400 variance height)
-  sweepDraws <- sequence $ map (drawSweep) $ take xs sweeps
-  c <- fgColour
-  return $ do
-    setColour (c, 0.2 :: Double)
-    foldr1 (>>) sweepDraws
+drapeOver ::
+     Double
+  -> V2 Double
+  -> Q.QuadTree Circle
+  -> V.Vector (V2 Double)
+  -> V.Vector (V2 Double)
+drapeOver margin center tree points =
+  if done
+    then points'
+    else drapeOver margin center tree points'
+  where
+    distanceFrom p =
+      negate $
+      fromJust $
+      fmap ((overlap (Circle p margin)) . (Q.leafTag)) $
+      Q.nearest heuristic (Q.Leaf p (Circle p margin)) tree
+    update p =
+      let dist = distanceFrom p
+          step = max dist 3
+          p' = moveToward center p step
+       in if dist < 0 || distance p' center < 5
+            then (False, p)
+            else (True, p')
+    updates = V.map (update) points
+    points' = V.map (snd) updates
+    done = not $ V.any (fst) updates
 
-solidLayer :: RGB Double -> Generate (Render ())
-solidLayer colour = do
-  World {..} <- asks world
-  frame <- fullFrame
+roughRelativeExtent :: V2 Double -> V.Vector (V2 Double) -> Double
+roughRelativeExtent center vs = (negate 1) * (distance center $ V.head vs)
+
+cmpExtent ::
+     V2 Double -> V.Vector (V2 Double) -> V.Vector (V2 Double) -> Ordering
+cmpExtent center v1 v2 =
+  let f = roughRelativeExtent center
+   in compare (f v1) (f v2)
+
+drawLine :: V.Vector (V2 Double) -> Generate (Render ())
+drawLine points = do
+  colour <- fgColour
+  width <- sampleRVar $ uniform 0.1 3.0
+  dashMode :: Int <- sampleRVar $ uniform 0 1
+  dashes <-
+    if dashMode == 1
+      then sequence $ map (const $ sampleRVar $ uniform 1 40) [0 .. 10]
+      else pure []
+  let (V2 x y) = V.head points
+  let steps :: V.Vector (Render ()) =
+        V.map (\(V2 x y) -> lineTo x y) $ V.tail points
   return $ do
     setColour colour
-    rectangle 0 0 width height
+    setLineWidth width
+    setDash dashes 0
+    moveTo x y
+    V.foldr1 (>>) steps
+    closePath
     fill
+    --stroke
+
+-- Moves every point halfway to the midpoint of its neighbors
+smooth :: V.Vector (V2 Double) -> V.Vector (V2 Double)
+smooth points = V.map (uncurry midpoint) $ V.zip ms points
+  where
+    s1 = V.cons (V.last points) points
+    s2 = V.snoc points $ V.head points
+    s = V.zip s1 s2
+    ms = V.map (uncurry midpoint) s
+
+echoLine ::
+     Int -> V.Vector (V2 Double) -> Generate (V.Vector (V.Vector (V2 Double)))
+echoLine echos line = do
+  c <- centerPoint
+  throws <-
+    V.sequence $
+    V.generate echos $ const $ (sampleRVar $ normal 0 300 >>= return . abs)
+  return $
+    V.map (\throw -> V.map (\p -> moveToward c p (negate throw)) line) throws
+
+outlineCluster :: Int -> Q.QuadTree Circle -> Generate (V.Vector (V2 Double))
+outlineCluster res circles = do
+  smoothing <- sampleRVar $ uniform 10 150
+  c <- centerPoint
+  margin <- sampleRVar $ uniform 3 7
+  let drape = estimateCircle res $ Circle c 800
+  let raw = drapeOver margin c circles drape
+  let smoothed = iterate (smooth) raw
+  return $ smoothed !! smoothing
+
+driftPointOut :: V2 Double -> Double -> V2 Double -> Generate (V2 Double)
+driftPointOut center strength p@(V2 x y) = do
+  sample <- noiseSample (V3 x y 0.1)
+  let r = distance center p
+  let r' = r' + sample * strength
+  return $ circumPoint center (circumPhase center p) r'
+
+driftOut ::
+     V2 Double
+  -> Double
+  -> V.Vector (V2 Double)
+  -> Generate (V.Vector (V2 Double))
+driftOut center strength points =
+  V.sequence $ V.map (driftPointOut center strength) points
+
+sun :: Generate (Render ())
+sun = do
+  center <- centerPoint
+  let base = Circle center 100
+  let basePoly = estimateCircle 3 base
+  strength <- sampleRVar $ uniform 10 50
+  let layers = 1
+  colour <- fgColour
+  polies <-
+    V.sequence $
+    V.generate layers $ \i ->
+      driftOut center (fromIntegral i / fromIntegral layers * strength) basePoly
+  return $ do
+    setColour colour
+    V.foldr1 (>>) $ V.map ((>> fill) . drawPath) polies
 
 scene :: Generate (Render ())
 scene = do
   World {..} <- asks world
-  frame <- fullFrame
-  bg <- solidLayer bgColour
-  hillCount <- sampleRVar $ uniform 4 30
-  heights <-
-    V.sequence $ V.generate hillCount $ const $ sampleRVar $ uniform 100 40000
-  amplitudes <-
-    V.sequence $ V.map (const $ sampleRVar $ uniform 10000.0 800000.0) heights
-  frequencies <-
-    V.sequence $ V.map (const $ sampleRVar $ uniform 0.000002 0.000005) heights
-  brooms <-
-    V.sequence $
-    V.map (\(height, amp, freq) -> sweep amp freq height) $
-    V.zip3 heights amplitudes frequencies
+  let frame =
+        Rect (V2 (width / 5) (height / 5)) (width / 5 * 3) (height / 5 * 3)
+  circleCount <- sampleRVar $ uniform 100 3000
+  let circleSearch = mkSearch circleCount frame
+  (CircleSearch tree circles _ _) <-
+    iterateMaybeM (search) circleSearch >>= return . last
+  let resolution = 3000
+  outline <- outlineCluster resolution tree
+  let echoCount = 10000
+  outlines <- echoLine echoCount outline
+  center <- centerPoint
+  let outlines' = V.sortBy (cmpExtent center) outlines
+  outlineDraws <- V.sequence $ V.map (drawLine) outlines'
+  draws <- sequence $ map (drawCircle) circles
+  sunDraw <- sun
+  rotation <- sampleRVar $ uniform 0 (2 * pi)
+  bgColour_ <- bgColour
   return $ do
-    setAntialias AntialiasBest
-    bg
-    foldr1 (>>) brooms
+    setColour bgColour_
+    rectangle 0 0 width height
+    fill
+    translate (width / 2) (height / 2)
+    scale 2 2
+    rotate rotation
+    --foldr1 (>>) draws
+    V.foldr1 (>>) outlineDraws
+    --sunDraw
     return ()
+
+data Palette =
+  Palette String
+          [String]
+
+redPalette :: Palette
+redPalette = Palette "F8F5EB" ["AD4749", "F8F5EB", "BFAAB9", "AF849B"]
+
+castle = Palette "FFFFFF" ["C74894", "FDDCB7", "F75856", "66AA79", "07444D"]
+
+mote = Palette "EECDB6" ["A83250", "13192C", "8D4C33", "E08752", "A83250"]
+
+metroid = Palette "ECE9E4" ["4DDCEC", "189CE6", "116FAE", "2D1D39"]
+
+gurken = Palette "FCFDF8" ["3FACA5", "7DDCC6", "F79EA2", "FA5778"]
+
+palettes :: V.Vector Palette
+palettes = V.fromList $ [castle, redPalette, mote, metroid, gurken]
+
+palette :: Generate Palette
+palette = do
+  seed_ <- asks seed
+  let i = seed_ `mod` (V.length palettes)
+  return $ palettes V.! i
 
 fgColour :: Generate (RGB Double)
 fgColour = do
-  let palette =
-        V.map (hexcolour) $
-        V.fromList $ ["0C1B20", "065275", "328197", "25445D", "77D0E4"]
+  Palette _ fgs <- palette
+  let palette = V.map (hexcolour) $ V.fromList fgs
   i <- sampleRVar $ uniform 0 (V.length palette - 1)
   return $ palette V.! i
 
-bgColour :: RGB Double
-bgColour = hexcolour "F6F9F5" --"ffffff"
+bgColour :: Generate (RGB Double)
+bgColour = do
+  Palette bg _ <- palette
+  return $ hexcolour bg
 
 main :: IO ()
 main = runInvocation scene

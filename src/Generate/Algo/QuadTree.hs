@@ -1,4 +1,4 @@
-module Algo.QuadTree
+module Generate.Algo.QuadTree
   ( QuadTree(..)
   , Quad(..)
   , Leaf(..)
@@ -17,7 +17,7 @@ import qualified Data.List as L
 import Data.Maybe
 import Data.Ord
 import qualified Data.Vector as V
-import Geom.Rect
+import Generate.Geom.Rect
 import Test.Hspec
 
 data QuadTree v
