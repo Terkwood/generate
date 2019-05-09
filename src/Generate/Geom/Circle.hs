@@ -3,6 +3,7 @@ module Generate.Geom.Circle
   , circumPoint
   , circumPhase
   , overlap
+  , rotateAbout
   ) where
 
 import Data.RVar
@@ -36,3 +37,9 @@ circumPhase (V2 cx cy) (V2 x y) = atan2 (y - cy) (x - cx)
 
 circumPoint :: V2 Double -> Double -> Double -> V2 Double
 circumPoint (V2 x y) theta r = (V2 (x + r * cos theta) (y + r * sin theta))
+
+rotateAbout :: V2 Double -> Double -> V2 Double -> V2 Double
+rotateAbout center theta p =
+  let phase = circumPhase center p
+      r = distance center p
+   in circumPoint center (phase + theta) r

@@ -3,6 +3,7 @@ module Generate
   , module Control.Monad.Reader
   , module Data.Colour.SRGB
   , module Data.List
+  , module Data.List.Split
   , module Data.Maybe
   , module Data.Ord
   , module Data.RVar
@@ -17,6 +18,7 @@ module Generate
   , module Generate.Geom.Circle
   , module Generate.Geom.Rect
   , module Generate.Geom.Line
+  , module Generate.Geom.Spline
   , module Generate.Monad
   , module Generate.Runner
   ) where
@@ -25,6 +27,7 @@ import Control.Monad.Extra
 import Control.Monad.Reader
 import Data.Colour.SRGB
 import Data.List
+import Data.List.Split
 import Data.Maybe
 import Data.Ord
 import Data.RVar
@@ -37,6 +40,7 @@ import Generate.Geom
 import Generate.Geom.Circle
 import Generate.Geom.Line
 import Generate.Geom.Rect
+import Generate.Geom.Spline
 import Generate.Monad
 import Generate.Runner
 import Graphics.Rendering.Cairo
