@@ -8,6 +8,7 @@ import Generate
 import qualified Generate.Algo.QuadTree as Q
 import qualified Generate.Algo.Vec as V
 import Generate.Colour.SimplePalette
+import Generate.Patterns.Grid
 import Generate.Patterns.Sampling
 
 ramp :: Int -> V.Vector Double
@@ -195,18 +196,47 @@ instance Drawable Flower where
     --foldr (>>) (pure ()) $ map (drawCore) core
     return ()
 
+gridPetals :: SimplePalette -> Generate [Petal]
+gridPetals palette = do
+  World {..} <- asks world
+  count :: Int <- sampleRVar $ uniform 100 10000
+  screen <- fullFrame
+  let screen' = scaleFrom 1.2 (center screen) screen
+  spawnPoints <- sequence $ map (const $ spatialSample screen') [1 .. count]
+  noiseScale <- sampleRVar $ uniform (width / 3 * 2) (width * 2)
+  noiseSamples <-
+    sequence $
+    map
+      (\(V2 x y) -> noiseSample $ V3 (x / noiseScale) (y / noiseScale) 0.4)
+      spawnPoints
+  let thetas = map (* (2 * pi)) noiseSamples
+  baseSize <- sampleRVar $ uniform 30 70
+  sizes <-
+    sequence $
+    map
+      (const $ sampleRVar (normal 0 3 >>= return . (+ baseSize) . abs))
+      spawnPoints
+  petals <-
+    sequence $
+    map (\(s, p, t) -> mkPetal palette s p t) $ zip3 sizes spawnPoints thetas
+  wigglePower <- sampleRVar (normal 0 $ (baseSize / 5)) >>= return . abs
+  let wiggler = radialWiggler wigglePower
+  waterPetals :: [Petal] <-
+    sequence (map (flatWaterColour 0.3 4 wiggler) petals) >>= return . concat
+  return waterPetals
+
 scene :: Generate (Render ())
 scene = do
   World {..} <- asks world
   center <- centerPoint
   petalOutlineColour <- fgColour gurken
-  petal <- mkFlower center
+  petal <- gridPetals mote
   return $ do
     setColour $ bgColour gurken
     rectangle 0 0 width height
     fill
     setColour petalOutlineColour
-    draw petal
+    foldr1 (>>) $ map ((>> fill) . draw) petal
     setSourceRGBA 1 0 0 1
     setLineWidth 10.0
     return ()

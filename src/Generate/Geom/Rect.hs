@@ -13,6 +13,8 @@ import Data.Random.Distribution.Uniform
 import Linear
 import Test.Hspec
 
+import Generate.Geom
+import Generate.Geom.Circle
 import Generate.Monad
 import Generate.Patterns.Sampling
 
@@ -27,6 +29,16 @@ instance Sample Rect where
     x <- sampleRVar $ uniform 0 1
     y <- sampleRVar $ uniform 0 1
     return $ V2 (tlx + x * w) (tly + y * h)
+
+instance Center Rect where
+  center (Rect (V2 tlx tly) w h) = V2 (tlx + w / 2) (tly + h / 2)
+
+instance Scale Rect where
+  scaleFrom factor anchor (Rect topLeft w h) =
+    let phase = circumPhase anchor topLeft
+        dist = distance topLeft anchor
+        topLeft' = circumPoint anchor phase $ dist * factor
+     in Rect topLeft' (w * factor) (h * factor)
 
 fullFrame :: Generate Rect
 fullFrame = do
