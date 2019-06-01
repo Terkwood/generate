@@ -8,6 +8,7 @@ import Generate
 import qualified Generate.Algo.QuadTree as Q
 import qualified Generate.Algo.Vec as V
 import Generate.Colour.SimplePalette
+import Generate.Colour.THColours
 import Generate.Patterns.Grid
 import Generate.Patterns.Sampling
 
@@ -110,7 +111,7 @@ instance Wiggle Petal where
     curve' <- sequence $ map (wiggle wiggler) _petalCurve
     return $ petal {_petalCurve = curve'}
 
-mkPetal :: SimplePalette -> Double -> V2 Double -> Double -> Generate Petal
+mkPetal :: THColours -> Double -> V2 Double -> Double -> Generate Petal
 mkPetal palette size root@(V2 rx ry) theta = do
   let orient = rotateAbout root theta
   let left = orient $ (V2 (rx - size / 2) (ry - size))
@@ -120,7 +121,7 @@ mkPetal palette size root@(V2 rx ry) theta = do
   wigglePower <- sampleRVar (normal 0 (size / 20)) >>= return . abs
   let wiggler = radialWiggler wigglePower
   curve'' <- sequence $ map (wiggle wiggler) $ realizeCurve curve'
-  colour <- fgColour palette
+  colour <- assignTHColour palette root
   return $ Petal root size curve'' (colour, 1)
 
 circleBezierFactor = 0.551915024494
@@ -171,8 +172,9 @@ mkFlower root = do
   petalCount :: Int <- sampleRVar $ uniform 10 100
   petalThetas <-
     sequence $ map (const $ sampleRVar $ uniform 0 (2 * pi)) [0 .. petalCount]
+  thMote <- mkTHColours mote
   let makePetals = do
-        raw <- sequence $ map (mkPetal mote (size * 5) root) petalThetas
+        raw <- sequence $ map (mkPetal thMote (size * 5) root) petalThetas
         melted :: [[Petal]] <-
           sequence (map (flatWaterColour 0.01 30 wiggler) raw)
         return $ concat melted
@@ -196,13 +198,14 @@ instance Drawable Flower where
     --foldr (>>) (pure ()) $ map (drawCore) core
     return ()
 
-gridPetals :: SimplePalette -> Generate [Petal]
-gridPetals palette = do
+gridPetals :: Int -> THColours -> Generate [Petal]
+gridPetals layerCount palette = do
   World {..} <- asks world
-  count :: Int <- sampleRVar $ uniform 100 10000
+  count :: Int <- sampleRVar $ uniform 10000 20000
   screen <- fullFrame
   let screen' = scaleFrom 1.2 (center screen) screen
-  spawnPoints <- sequence $ map (const $ spatialSample screen') [1 .. count]
+  spawnPoints <-
+    sequence $ map (const $ spatialSample screen') [1 .. (count * 50)]
   noiseScale <- sampleRVar $ uniform (width / 3 * 2) (width * 2)
   noiseSamples <-
     sequence $
@@ -219,26 +222,26 @@ gridPetals palette = do
   petals <-
     sequence $
     map (\(s, p, t) -> mkPetal palette s p t) $ zip3 sizes spawnPoints thetas
-  wigglePower <- sampleRVar (normal 0 $ (baseSize / 5)) >>= return . abs
+  wigglePower <- sampleRVar (normal 0 $ (baseSize / 10)) >>= return . abs
   let wiggler = radialWiggler wigglePower
   waterPetals :: [Petal] <-
-    sequence (map (flatWaterColour 0.3 4 wiggler) petals) >>= return . concat
+    sequence (map (flatWaterColour 0.3 layerCount wiggler) petals) >>=
+    return . concat
   return waterPetals
 
 scene :: Generate (Render ())
 scene = do
   World {..} <- asks world
   center <- centerPoint
-  petalOutlineColour <- fgColour gurken
-  petal <- gridPetals mote
+  simplePalette <-
+    randElem $ V.fromList [mote, castle, metroid, gurken, redPalette]
+  layerCount <- sampleRVar $ uniform 3 6
+  petal <- mkTHColours simplePalette >>= gridPetals layerCount
   return $ do
-    setColour $ bgColour gurken
+    setColour $ bgColour simplePalette
     rectangle 0 0 width height
     fill
-    setColour petalOutlineColour
     foldr1 (>>) $ map ((>> fill) . draw) petal
-    setSourceRGBA 1 0 0 1
-    setLineWidth 10.0
     return ()
 
 main :: IO ()

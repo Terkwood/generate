@@ -1,5 +1,5 @@
 module Generate.Colour.SimplePalette
-  ( SimplePalette
+  ( SimplePalette(..)
   , mkSimplePalette
   , fgColour
   , bgColour
@@ -7,6 +7,7 @@ module Generate.Colour.SimplePalette
   , mote
   , metroid
   , gurken
+  , redPalette
   ) where
 
 import Data.Colour.SRGB
