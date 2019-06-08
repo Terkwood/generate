@@ -47,9 +47,10 @@ waterPetals :: Int -> [PetalSpawnPoint] -> THColours -> Generate [Petal]
 waterPetals layerCount spawnPoints palette = do
   petals <- sequence (map (spawnBand palette) spawnPoints) >>= return . concat
   let wigglePower = maximum $ map _petalSpawnPointSize spawnPoints
-  let wiggler = radialWiggler wigglePower
+  let wiggler = radialWiggler 1
+  let opacity = 0.4 / (fromIntegral layerCount)
   waterPetals :: [[Petal]] <-
-    sequence (map (flatWaterColour 0.4 layerCount wiggler) petals)
+    sequence (map (flatWaterColour opacity layerCount wiggler) petals)
   return $ concat waterPetals
 
 data NoiseWalker = NoiseWalker
@@ -59,8 +60,9 @@ data NoiseWalker = NoiseWalker
 
 mkNoiseWalker :: Generate NoiseWalker
 mkNoiseWalker = do
-  scale <- sampleRVar $ uniform 200 2500
-  step <- sampleRVar $ uniform 5 10
+  World {..} <- asks world
+  scale <- sampleRVar $ uniform (200 / (500 / width)) (2500 / (500 / width))
+  step <- sampleRVar $ uniform (5 / (500 / width)) (10 / (500 / width))
   return $ NoiseWalker scale step
 
 stepNoiseWalker ::
@@ -68,7 +70,7 @@ stepNoiseWalker ::
 stepNoiseWalker start n walker = do
   (_, path, _) <-
     iterateMaybeM (_stepNoiseWalker start) (n, [], walker) >>= return . last
-  return path
+  return $ path
 
 noiseWalkerDir :: NoiseWalker -> V2 Double -> Generate Double
 noiseWalkerDir (NoiseWalker scale _) (V2 x y) = do
@@ -87,11 +89,15 @@ _stepNoiseWalker start (left, path, w@(NoiseWalker _ step)) = do
           then start
           else snd $ head path
   theta <- noiseWalkerDir w last
+  let path' =
+        if null path
+          then [(theta, start)]
+          else path
   let next = circumPoint last theta step
   return $
     if withinRect frame next
-      then Just (left - 1, (theta, next) : path, w)
-      else Nothing
+      then Just (left - 1, (theta, next) : path', w)
+      else Just (0, path', w)
 
 squigglyPath :: Int -> V2 Double -> Generate Line
 squigglyPath n start = do
@@ -114,22 +120,42 @@ intoSpawnPoints thicknessF spreadF path = do
 mkPalette :: Generate SimplePalette
 mkPalette =
   randElem $
-  V.fromList [monoPastelBlue, monoPastelRed, monoPastelBlue, metroid, gurken]
+  V.fromList
+    [ monoPastelBlue
+    , monoPastelRed
+    , monoPastelBlue
+    , monoPastelPurple
+    , jhoto
+    , castle
+    , metroid
+    , gurken
+    ]
+
+filterLine :: Line -> Generate (Maybe Line)
+filterLine line = do
+  scaleFactor <- sampleRVar $ normal 0.8 0.3
+  threshold :: Double <- sampleRVar $ uniform 0 1
+  visible :: Double <- sampleRVar $ uniform 0 1
+  return $
+    if visible < threshold
+      then Nothing
+      else Just $ scaleFrom scaleFactor (center line) line
 
 background :: SimplePalette -> Generate (Render ())
 background palette = do
   World {..} <- asks world
   density <- sampleRVar $ uniform 20 100
   lines <- maze gridCfgDefault {rows = density, cols = density}
-  baseLineColour <- fgColour palette
+  lines' <- mapMaybeM filterLine lines
   scale <- sampleRVar $ uniform 10 1000
   let lineShader line = do
+        colour <- fgColour palette
         let (V2 x y) = V.head $ toVertices line
         opacity <-
           noiseSample (V3 (x / scale) (y / scale) 0.1) >>=
           return . abs . (* 0.25)
-        return $ (baseLineColour, opacity)
-  lineColours <- sequence $ map lineShader lines
+        return $ (colour, opacity)
+  lineColours <- sequence $ map lineShader lines'
   let lineDrawer line colour = do
         setColour colour
         draw line
@@ -138,29 +164,31 @@ background palette = do
     setColour $ bgColour palette
     rectangle 0 0 width height
     fill
-    foldr1 (>>) $ map (uncurry $ lineDrawer) $ zip lines lineColours
+    foldr1 (>>) $ map (uncurry $ lineDrawer) $ zip lines' lineColours
 
 scene :: SimplePalette -> Generate (Render ())
 scene basePalette = do
   World {..} <- asks world
   frame <- fullFrame
-  let spreadF i = return $ 2 * (log $ fromIntegral i)
-  petalBaseSize <- sampleRVar $ uniform 2 10
-  petalVariance <- sampleRVar $ uniform 1 5
+  let spreadF i = return $ (2 / (500 / width)) * (log $ fromIntegral i)
+  petalBaseSize <- sampleRVar $ uniform 2 4
+  petalVariance <- sampleRVar $ uniform 1 2
   let thicknessF i = do
         petalSize <- sampleRVar $ normal petalBaseSize petalVariance
         return $ petalSize * (log $ fromIntegral i)
+  root <- spatialSample (scaleFrom 0.75 (center frame) frame)
+  vineCount <- sampleRVar $ uniform 1 50
   spawnPaths <-
     sequence $
     map
       (const $ do
          w <- mkNoiseWalker
-         start <- return $ center frame --spatialSample (scaleFrom 0.9 (center frame) frame)
-         path <- stepNoiseWalker start 1000 w
+         start <- return $ root
+         path <- stepNoiseWalker start (floor $ 1000 / (500 / width)) w
          intoSpawnPoints thicknessF spreadF path)
-      [0 .. 10]
+      [0 .. vineCount]
   palettes <- sequence $ map (const $ mkTHColours basePalette) spawnPaths
-  layerCount <- sampleRVar $ uniform 1 2
+  layerCount <- sampleRVar $ uniform 1 10
   petalSets <-
     sequence $
     map (\(palette, path) -> waterPetals layerCount path palette) $

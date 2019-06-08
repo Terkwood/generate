@@ -37,7 +37,7 @@ mkPetal palette size root@(V2 rx ry) theta = do
   let left = orient $ (V2 (rx - size / 2) (ry - size))
   let right = orient $ V2 (rx + size / 2) (ry - size)
   let curve = mkCompositeCurve $ mkBezierCurve2d root left right root
-  let curve' = subdivideN 2 curve
+  let curve' = subdivideN 4 curve
   wigglePower <- sampleRVar (normal 0 (size / 20)) >>= return . abs
   let wiggler = radialWiggler wigglePower
   curve'' <- sequence $ map (wiggle wiggler) $ realizeCurve curve'
