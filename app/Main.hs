@@ -43,14 +43,13 @@ spawnBand palette (PetalSpawnPoint point theta thickness spread) = do
     map (\(p, r) -> thetaForDist r >>= \r -> mkPetal palette thickness p r) $
     zip (V.toList points') radii
 
-waterPetals :: Int -> [PetalSpawnPoint] -> THColours -> Generate [Petal]
-waterPetals layerCount spawnPoints palette = do
+waterPetals :: Int -> Int -> [PetalSpawnPoint] -> THColours -> Generate [Petal]
+waterPetals vineCount layerCount spawnPoints palette = do
   petals <- sequence (map (spawnBand palette) spawnPoints) >>= return . concat
   let wigglePower = maximum $ map _petalSpawnPointSize spawnPoints
-  let wiggler = radialWiggler 1
-  let opacity = 0.4 / (fromIntegral layerCount)
+  let wiggler = radialWiggler $ 10 / (fromIntegral vineCount)
   waterPetals :: [[Petal]] <-
-    sequence (map (flatWaterColour opacity layerCount wiggler) petals)
+    sequence (map (flatWaterColour 1 layerCount wiggler) petals)
   return $ concat waterPetals
 
 data NoiseWalker = NoiseWalker
@@ -153,7 +152,7 @@ background palette = do
         let (V2 x y) = V.head $ toVertices line
         opacity <-
           noiseSample (V3 (x / scale) (y / scale) 0.1) >>=
-          return . abs . (* 0.25)
+          return . abs . (* 0.5)
         return $ (colour, opacity)
   lineColours <- sequence $ map lineShader lines'
   let lineDrawer line colour = do
@@ -170,14 +169,19 @@ scene :: SimplePalette -> Generate (Render ())
 scene basePalette = do
   World {..} <- asks world
   frame <- fullFrame
-  let spreadF i = return $ (2 / (500 / width)) * (log $ fromIntegral i)
+  vineCount :: Int <- sampleRVar $ uniform 1 500
+  let spreadF i =
+        return $
+        (2 / (500 / width) / (min 20 (fromIntegral vineCount)) * 20) *
+        (log $ fromIntegral i)
   petalBaseSize <- sampleRVar $ uniform 2 4
   petalVariance <- sampleRVar $ uniform 1 2
   let thicknessF i = do
         petalSize <- sampleRVar $ normal petalBaseSize petalVariance
-        return $ petalSize * (log $ fromIntegral i)
+        return $
+          petalSize * (log $ fromIntegral i) / (min 20 (fromIntegral vineCount)) *
+          20
   root <- spatialSample (scaleFrom 0.75 (center frame) frame)
-  vineCount <- sampleRVar $ uniform 1 50
   spawnPaths <-
     sequence $
     map
@@ -188,10 +192,10 @@ scene basePalette = do
          intoSpawnPoints thicknessF spreadF path)
       [0 .. vineCount]
   palettes <- sequence $ map (const $ mkTHColours basePalette) spawnPaths
-  layerCount <- sampleRVar $ uniform 1 10
+  layerCount <- sampleRVar $ uniform 1 4
   petalSets <-
     sequence $
-    map (\(palette, path) -> waterPetals layerCount path palette) $
+    map (\(palette, path) -> waterPetals vineCount layerCount path palette) $
     zip palettes spawnPaths
   return $ do
     foldr1 (>>) $ map ((>> fill) . draw) $ concat petalSets
