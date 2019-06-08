@@ -1,5 +1,6 @@
 module Generate.Algo.Vec
   ( sortBy
+  , sortWith
   ) where
 
 import Data.Ord
@@ -14,3 +15,6 @@ sortBy compare vs = backpermute vs indices'
     indices' = convert $ modify (I.sortBy compare') indices
     compare' i1 i2 = compare (vs ! i1) (vs ! i2)
     indices = generate (length vs) id
+
+sortWith :: Ord o => (e -> o) -> Vector e -> Vector e
+sortWith f vs = sortBy (\e1 e2 -> compare (f e1) (f e2)) vs

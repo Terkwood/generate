@@ -33,7 +33,7 @@ instance Wiggle Petal where
 
 mkPetal :: THColours -> Double -> V2 Double -> Double -> Generate Petal
 mkPetal palette size root@(V2 rx ry) theta = do
-  let orient = rotateAbout root theta
+  let orient = rotateAbout root $ theta - pi / 2
   let left = orient $ (V2 (rx - size / 2) (ry - size))
   let right = orient $ V2 (rx + size / 2) (ry - size)
   let curve = mkCompositeCurve $ mkBezierCurve2d root left right root

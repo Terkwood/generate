@@ -1,7 +1,6 @@
 module Generate.Geom.Line
   ( Line
   , mkLine
-  , linePath
   ) where
 
 import qualified Data.Vector as V
@@ -9,6 +8,7 @@ import Graphics.Rendering.Cairo as Cairo
 import Linear
 
 import Generate.Coord
+import Generate.Draw
 import Generate.Geom
 
 data Line =
@@ -24,11 +24,11 @@ mkLine points =
     then Just $ Line points
     else Nothing
 
-linePath :: Line -> Render ()
-linePath (Line points) = do
-  let (V2 x y) = V.head points
-  moveTo x y
-  V.foldr (>>) (pure ()) $ V.map (\(V2 x y) -> lineTo x y) $ V.tail points
+instance Drawable Line where
+  draw (Line points) = do
+    let (V2 x y) = V.head points
+    moveTo x y
+    V.foldr (>>) (pure ()) $ V.map (\(V2 x y) -> lineTo x y) $ V.tail points
 
 instance Subdivisible Line where
   subdivide (Line verts) = Line $ V.snoc verts' $ V.last verts
