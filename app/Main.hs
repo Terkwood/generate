@@ -73,7 +73,8 @@ stepNoiseWalker start n walker = do
 
 noiseWalkerDir :: NoiseWalker -> V2 Double -> Generate Double
 noiseWalkerDir (NoiseWalker scale _) (V2 x y) = do
-  sample <- noiseSample $ V3 (x / scale) (y / scale) 0.4
+  time <- asks frame >>= return . fromIntegral
+  sample <- noiseSample $ V3 (x / scale) (y / scale) (time / scale)
   return $ (2 *) . (pi *) $ abs sample
 
 _stepNoiseWalker ::
@@ -169,18 +170,18 @@ scene :: SimplePalette -> Generate (Render ())
 scene basePalette = do
   World {..} <- asks world
   frame <- fullFrame
-  vineCount :: Int <- sampleRVar $ uniform 1 500
+  vineCount :: Int <- sampleRVar $ uniform 1 50
   let spreadF i =
         return $
-        (2 / (500 / width) / (min 20 (fromIntegral vineCount)) * 20) *
+        (2 / (500 / width) / (min 50 (fromIntegral vineCount)) * 7) *
         (log $ fromIntegral i)
   petalBaseSize <- sampleRVar $ uniform 2 4
   petalVariance <- sampleRVar $ uniform 1 2
   let thicknessF i = do
         petalSize <- sampleRVar $ normal petalBaseSize petalVariance
         return $
-          petalSize * (log $ fromIntegral i) / (min 20 (fromIntegral vineCount)) *
-          20
+          petalSize * (log $ fromIntegral i) / (min 50 (fromIntegral vineCount)) *
+          7
   root <- spatialSample (scaleFrom 0.75 (center frame) frame)
   spawnPaths <-
     sequence $

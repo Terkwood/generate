@@ -37,7 +37,7 @@ import Generate.Monad
 import Generate.Render
 
 runInvocation :: Generate (Render ()) -> IO ()
-runInvocation layers = runStatefulInvocation layers (return) (return)
+runInvocation layers = runStatefulInvocation layers (return) (const layers)
 
 runStatefulInvocation ::
      Generate a -> (a -> Generate (Render ())) -> (a -> Generate a) -> IO ()
