@@ -7,6 +7,7 @@ module Generate
   , module Data.Maybe
   , module Data.Ord
   , module Data.RVar
+  , module Data.Default
   , module Data.Random.Distribution.Normal
   , module Data.Random.Distribution.Uniform
   , module Graphics.Rendering.Cairo
@@ -26,6 +27,7 @@ module Generate
 import Control.Monad.Extra
 import Control.Monad.Reader
 import Data.Colour.SRGB
+import Data.Default
 import Data.List
 import Data.List.Split
 import Data.Maybe

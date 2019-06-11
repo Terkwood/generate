@@ -51,6 +51,7 @@ dependencies:
 - hspec
 - utility-ht
 - vector-algorithms
+- data-default
 
 
 default-extensions:
@@ -74,6 +75,7 @@ default-extensions:
 - ViewPatterns
 - MultiParamTypeClasses
 - TypeFamilies
+- DisambiguateRecordFields
 
 
 library:
