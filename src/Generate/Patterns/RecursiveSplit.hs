@@ -1,5 +1,5 @@
 module Generate.Patterns.RecursiveSplit
-  ( RecursiveSplit(..)
+  ( recursiveSplit
   , RecursiveSplitCfg(..)
   , SplitCfg(..)
   , SplitStatus(..)
@@ -51,20 +51,18 @@ instance Default RecursiveSplitCfg where
       , shouldContinue = \(SplitStatus _ depth) -> depth < 4
       }
 
-class RecursiveSplit rs where
-  recursiveSplit :: RecursiveSplitCfg -> rs -> Generate [rs]
+recursiveSplit ::
+     (Split rs, Center rs) => RecursiveSplitCfg -> rs -> Generate [rs]
+recursiveSplit cfg rs = _recursiveSplit cfg 0 [] rs
 
-instance (Split rs, Center rs) => RecursiveSplit rs where
-  recursiveSplit cfg rs = split cfg 0 [] rs
-
-split ::
+_recursiveSplit ::
      (Split rs, Center rs)
   => RecursiveSplitCfg
   -> Int
   -> [rs]
   -> rs
   -> Generate [rs]
-split cfg@(RecursiveSplitCfg splitCfg shouldContinue) depth acc rs =
+_recursiveSplit cfg@(RecursiveSplitCfg splitCfg shouldContinue) depth acc rs =
   let splitStatus = SplitStatus (center rs) depth
    in if not $ shouldContinue splitStatus
         then return $ rs : acc
@@ -78,5 +76,5 @@ split cfg@(RecursiveSplitCfg splitCfg shouldContinue) depth acc rs =
                   X -> x
                   Y -> y
           let (rs1, rs2) = splitOnAxis axis t rs
-          left <- split cfg (depth + 1) [] rs1
-          split cfg (depth + 1) (acc ++ left) rs2
+          left <- _recursiveSplit cfg (depth + 1) [] rs1
+          _recursiveSplit cfg (depth + 1) (acc ++ left) rs2

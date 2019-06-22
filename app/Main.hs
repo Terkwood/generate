@@ -6,6 +6,7 @@ import System.IO.Unsafe
 
 import Generate
 import Generate.Colour.SimplePalette
+import Generate.Patterns.Bands
 import Generate.Patterns.NoiseWalker
 import Generate.Patterns.RecursiveSplit
 import Generate.Patterns.Water
@@ -63,6 +64,40 @@ renderStroke (BrushStroke palette cfg thickness spreadM) = do
            stroke) $
       zip paths colours
 
+data BandBox = BandBox
+  { bandLines :: V.Vector Line
+  , colour :: (RGB Double, Double)
+  }
+
+instance Wiggle BandBox where
+  wiggle w b@(BandBox lines _) = do
+    lines' <- V.sequence $ V.map (wiggle w) lines
+    return $ b {bandLines = lines'}
+
+instance Translucent BandBox where
+  setOpacity o' b@(BandBox _ (c, o)) = b {colour = (c, o')}
+
+instance Drawable BandBox where
+  draw (BandBox lines c) = do
+    setColour c
+    drawAll $ V.toList lines
+    stroke
+
+bandBox :: SimplePalette -> Rect -> Generate (Render ())
+bandBox palette box = do
+  c <- fgColour palette
+  let bounds = intoBounds $ UniformBands 10
+  let box' = scaleFromCenter 0.7 box
+  let bands = bandsOnAxis X bounds box'
+  let bandBoxes =
+        map
+          (\band ->
+             BandBox (V.map (subdivideN 4) $ toLines band) (c, 1.0 :: Double))
+          bands
+  let wiggler = radialWiggler 0.2
+  bandBoxes' <- sequence $ map (flatWaterColour 0.4 3 wiggler) bandBoxes
+  return $ drawAll $ concat bandBoxes'
+
 scene :: SimplePalette -> Generate (Render ())
 scene palette = do
   root <- centerPoint
@@ -72,11 +107,11 @@ scene palette = do
   let predicate =
         sampleRVar (uniform (negate 1) 1) >>= \(v :: Double) -> return $ v > 0
   boxes <- recursiveSplit def box >>= fairFilter predicate
+  bandBoxes <- sequence $ map (bandBox palette) boxes
   return $ do
     setColour colour
     setLineWidth 3
-    drawAll boxes
-    stroke
+    foldr (>>) (pure ()) bandBoxes
 
 main :: IO ()
 main =

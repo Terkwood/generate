@@ -11,13 +11,16 @@ module Generate.Patterns.Water
   ) where
 
 import Control.Monad.Extra
+import Data.Maybe
 import Data.RVar
 import Data.Random.Distribution.Normal
 import Data.Random.Distribution.Uniform
+import qualified Data.Vector as V
 import Linear
 
 import Generate.Geom
 import Generate.Geom.Circle
+import Generate.Geom.Line
 import Generate.Monad
 
 data Wiggler =
@@ -28,6 +31,11 @@ class Wiggle w where
 
 instance Wiggle (V2 Double) where
   wiggle (Wiggler f) p = f p
+
+instance Wiggle Line where
+  wiggle w line =
+    V.sequence (V.map (wiggle w) $ toVertices line) >>= \vs ->
+      return $ fromJust $ fromVertices vs
 
 class Translucent t where
   setOpacity :: Double -> t -> t

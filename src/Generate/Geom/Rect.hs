@@ -7,9 +7,11 @@ module Generate.Geom.Rect
   ) where
 
 import Control.Monad.Reader
+import Data.Maybe
 import Data.RVar
 import Data.RVar
 import Data.Random.Distribution.Uniform
+import qualified Data.Vector as V
 import Graphics.Rendering.Cairo
 import Linear
 import Test.Hspec
@@ -18,6 +20,7 @@ import Generate.Coord
 import Generate.Draw
 import Generate.Geom
 import Generate.Geom.Circle
+import Generate.Geom.Line
 import Generate.Monad
 import Generate.Patterns.Sampling
 
@@ -46,6 +49,17 @@ instance Scale Rect where
 instance Drawable Rect where
   draw (Rect (V2 tlx tly) w h) = do
     rectangle tlx tly w h
+
+instance Lines Rect where
+  toLines (Rect tl@(V2 tlx tly) w h) =
+    V.fromList $
+    map
+      (fromJust . fromVertices . V.fromList)
+      [ [tl, V2 tlx (tly + h)]
+      , [tl, V2 (tlx + w) tly]
+      , [V2 (tlx + w) tly, V2 (tlx + w) (tly + h)]
+      , [V2 (tlx + w) (tly + h), V2 tlx (tly + h)]
+      ]
 
 instance Split Rect where
   splitOnAxis axis t (Rect tl@(V2 x y) w h) = (Rect tl w1 h1, Rect tl2 w2 h2)

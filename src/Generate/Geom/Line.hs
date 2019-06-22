@@ -1,5 +1,6 @@
 module Generate.Geom.Line
   ( Line
+  , Lines(..)
   , mkLine
   ) where
 
@@ -19,6 +20,9 @@ data Line =
 instance Poly Line where
   toVertices (Line v) = v
   fromVertices v = mkLine v
+
+class Lines a where
+  toLines :: a -> V.Vector Line
 
 mkLine :: V.Vector (V2 Double) -> Maybe Line
 mkLine points =
