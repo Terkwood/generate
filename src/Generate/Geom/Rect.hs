@@ -10,9 +10,12 @@ import Control.Monad.Reader
 import Data.RVar
 import Data.RVar
 import Data.Random.Distribution.Uniform
+import Graphics.Rendering.Cairo
 import Linear
 import Test.Hspec
 
+import Generate.Coord
+import Generate.Draw
 import Generate.Geom
 import Generate.Geom.Circle
 import Generate.Monad
@@ -39,6 +42,26 @@ instance Scale Rect where
         dist = distance topLeft anchor
         topLeft' = circumPoint anchor phase $ dist * factor
      in Rect topLeft' (w * factor) (h * factor)
+
+instance Drawable Rect where
+  draw (Rect (V2 tlx tly) w h) = do
+    rectangle tlx tly w h
+
+instance Split Rect where
+  splitOnAxis axis t (Rect tl@(V2 x y) w h) = (Rect tl w1 h1, Rect tl2 w2 h2)
+    where
+      tl2 =
+        case axis of
+          X -> V2 (x + w1) y
+          Y -> V2 x (y + h1)
+      (w1, w2) =
+        case axis of
+          X -> (w * t, w * (1 - t))
+          Y -> (w, w)
+      (h1, h2) =
+        case axis of
+          X -> (h, h)
+          Y -> (h * t, h * (1 - t))
 
 fullFrame :: Generate Rect
 fullFrame = do

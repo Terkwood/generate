@@ -3,15 +3,19 @@ module Generate.Coord
   , centerPoint
   , midpoint
   , moveToward
+  , Axis(..)
   ) where
 
 import Control.Monad.Reader
 import Data.RVar
 import Data.Random.Distribution.Uniform
 import Generate.Geom.Circle
-import Generate.Geom.Rect
 import Generate.Monad
 import Linear
+
+data Axis
+  = X
+  | Y
 
 randomPoint :: Generate (V2 Double)
 randomPoint = do

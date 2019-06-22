@@ -3,10 +3,15 @@ module Generate.Geom
   , Subdivisible(..)
   , Center(..)
   , Scale(..)
+  , Split(..)
+  , ScaleCentered(..)
   ) where
 
 import qualified Data.Vector as V
 import Linear
+
+import Generate.Coord
+import Generate.Monad
 
 class Poly p where
   toVertices :: p -> V.Vector (V2 Double)
@@ -22,3 +27,12 @@ class Center c where
 
 class Scale s where
   scaleFrom :: Double -> V2 Double -> s -> s
+
+class ScaleCentered sc where
+  scaleFromCenter :: Double -> sc -> sc
+
+instance (Center sc, Scale sc) => ScaleCentered sc where
+  scaleFromCenter factor sc = scaleFrom factor (center sc) sc
+
+class Split s where
+  splitOnAxis :: Axis -> Double -> s -> (s, s)

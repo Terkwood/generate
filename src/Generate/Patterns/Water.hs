@@ -26,6 +26,9 @@ data Wiggler =
 class Wiggle w where
   wiggle :: Wiggler -> w -> Generate w
 
+instance Wiggle (V2 Double) where
+  wiggle (Wiggler f) p = f p
+
 class Translucent t where
   setOpacity :: Double -> t -> t
 

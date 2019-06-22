@@ -7,6 +7,10 @@ import System.IO.Unsafe
 import Generate
 import Generate.Colour.SimplePalette
 import Generate.Patterns.NoiseWalker
+import Generate.Patterns.RecursiveSplit
+import Generate.Patterns.Water
+
+import PetalStroke
 
 mkPalette :: Generate SimplePalette
 mkPalette =
@@ -61,20 +65,23 @@ renderStroke (BrushStroke palette cfg thickness spreadM) = do
 
 scene :: SimplePalette -> Generate (Render ())
 scene palette = do
-  start <- centerPoint
-  let cfg =
-        SquigglyPathCfg
-          { walkerCfg =
-              NoiseWalkerCfg {scale = normal 100 0.1, step = normal 1 0.1}
-          , length = 1000
-          , start = start
-          }
-  col <- fgColour palette
-  renderStroke $ BrushStroke palette cfg 5000 $ normal 0 4
+  root <- centerPoint
+  frame <- fullFrame
+  let box = scaleFromCenter 0.8 frame
+  colour <- fgColour palette
+  let predicate =
+        sampleRVar (uniform (negate 1) 1) >>= \(v :: Double) -> return $ v > 0
+  boxes <- recursiveSplit def box >>= fairFilter predicate
+  return $ do
+    setColour colour
+    setLineWidth 3
+    drawAll boxes
+    stroke
 
 main :: IO ()
 main =
   runInvocation $ do
     palette <- mkPalette
-    background palette
-    scene palette
+    bg <- background palette
+    fg <- scene palette
+    return $ bg >> fg

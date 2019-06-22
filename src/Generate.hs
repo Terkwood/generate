@@ -21,6 +21,7 @@ module Generate
   , module Generate.Geom.Line
   , module Generate.Geom.Spline
   , module Generate.Monad
+  , module Generate.Filter.Fair
   , module Generate.Runner
   ) where
 
@@ -38,6 +39,7 @@ import Data.Random.Distribution.Uniform
 import Generate.Colour
 import Generate.Coord
 import Generate.Draw
+import Generate.Filter.Fair
 import Generate.Geom
 import Generate.Geom.Circle
 import Generate.Geom.Line
