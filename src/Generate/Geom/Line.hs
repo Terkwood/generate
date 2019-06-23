@@ -24,11 +24,12 @@ instance Poly Line where
 class Lines a where
   toLines :: a -> V.Vector Line
 
-mkLine :: V.Vector (V2 Double) -> Maybe Line
-mkLine points =
-  if V.length points >= 2
-    then Just $ Line points
-    else Nothing
+mkLine :: Points p => p -> Maybe Line
+mkLine p =
+  let ps = points p
+   in if V.length ps >= 2
+        then Just $ Line ps
+        else Nothing
 
 instance Drawable Line where
   draw (Line points) = do

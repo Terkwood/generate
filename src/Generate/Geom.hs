@@ -5,6 +5,7 @@ module Generate.Geom
   , Scale(..)
   , Split(..)
   , ScaleCentered(..)
+  , Points(..)
   ) where
 
 import qualified Data.Vector as V
@@ -16,6 +17,12 @@ import Generate.Monad
 class Poly p where
   toVertices :: p -> V.Vector (V2 Double)
   fromVertices :: V.Vector (V2 Double) -> Maybe p
+
+class Points v where
+  points :: v -> V.Vector (V2 Double)
+
+instance Points (V.Vector (V2 Double)) where
+  points = id
 
 class Subdivisible s where
   subdivide :: s -> s

@@ -61,6 +61,11 @@ instance Lines Rect where
       , [V2 (tlx + w) (tly + h), V2 tlx (tly + h)]
       ]
 
+instance Points Rect where
+  points (Rect tl@(V2 tlx tly) w h) =
+    V.fromList $
+    [tl, V2 (tlx + w) tly, V2 (tlx + w) (tly + h), V2 tlx (tly + h)]
+
 instance Split Rect where
   splitOnAxis axis t (Rect tl@(V2 x y) w h) = (Rect tl w1 h1, Rect tl2 w2 h2)
     where

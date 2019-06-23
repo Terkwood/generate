@@ -48,7 +48,7 @@ instance Default RecursiveSplitCfg where
   def =
     RecursiveSplitCfg
       { splitCfg = const $ return def
-      , shouldContinue = \(SplitStatus _ depth) -> depth < 4
+      , shouldContinue = \(SplitStatus _ depth) -> depth < 3
       }
 
 recursiveSplit ::
