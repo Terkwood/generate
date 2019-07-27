@@ -80,7 +80,7 @@ extra-deps: [
   colour-accelerate-0.3.0.0,
   linear-accelerate-0.6.0.0,
   gloss-raster-accelerate-2.0.0.0,
-  cairo-0.13.4.2,
+  cairo-0.13.4.2
 ]
 
 

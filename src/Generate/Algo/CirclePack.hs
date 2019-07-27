@@ -55,6 +55,7 @@ valid tree c@(Circle center _) =
         Just (Q.Leaf _ nearestCircle) -> not $ overlap c nearestCircle > 0
         Nothing -> True
 
+{- Usage: iterateMaybeM search <searchObj> >>= return . last -}
 search :: CircleSearch -> Generate (Maybe CircleSearch)
 search (CircleSearch _ _ 0 _) = return Nothing
 search s@(CircleSearch tree circles remaining pattern) = do

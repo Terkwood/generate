@@ -10,22 +10,12 @@ import Generate.Patterns.Bands
 import Generate.Patterns.NoiseWalker
 import Generate.Patterns.RecursiveSplit
 import Generate.Patterns.Water
+import Generate.Raster.Sand
 
 import PetalStroke
 
 mkPalette :: Generate SimplePalette
-mkPalette =
-  randElem $
-  V.fromList
-    [ monoPastelBlue
-    , monoPastelRed
-    , monoPastelBlue
-    , monoPastelPurple
-    , jhoto
-    , castle
-    , metroid
-    , gurken
-    ]
+mkPalette = randElem $ V.fromList [jhoto, castle, metroid, gurken, mondrian]
 
 background :: SimplePalette -> Generate (Render ())
 background palette = do
@@ -55,7 +45,7 @@ renderStroke (BrushStroke palette cfg thickness spreadM) = do
       [0 .. thickness]
   colours <- sequence $ map (const $ fgColour palette) paths
   return $ do
-    setLineWidth 0.03
+    setLineWidth 0.5
     foldr1 (>>) $
       map
         (\(p, c) -> do
@@ -69,7 +59,7 @@ bandBox palette box = do
   c <- fgColour palette
   let bounds = intoBounds $ UniformBands 3
   let box' = scaleFromCenter 0.7 box
-  let bands = bandsOnAxis X bounds box'
+  let bands = [box'] -- bandsOnAxis X bounds box'
   scales <- sequence $ map (const $ sampleRVar $ normal 1 0.3) bands
   let bands' = map (uncurry scaleFromCenter) $ zip scales bands
   let polies = map (fromJust . mkLine) bands'
@@ -83,6 +73,8 @@ bandBox palette box = do
   splotches' <- sequence $ map (waterColour wiggler def) splotches
   return $ foldr (>>) (pure ()) $ map ((>> fill) . draw) $ concat splotches'
 
+sandCfg = SandCfg {attempts = 500, mkElement = \p -> pure $ Circle p 0.2}
+
 scene :: SimplePalette -> Generate (Render ())
 scene palette = do
   root <- centerPoint
@@ -91,12 +83,24 @@ scene palette = do
   colour <- fgColour palette
   let predicate :: Generate Bool =
         sampleRVar (uniform (negate 1) 1) >>= \(v :: Double) -> return $ v > 0
-  boxes <- recursiveSplit def box -- >>= fairFilter predicate
+  boxes <- recursiveSplit def frame -- >>= fairFilter predicate
+  let boxes' = map (scaleFromCenter 0.8) boxes
+  boxSands <- concatMapM (sandPaint sandCfg) boxes'
   bandBoxes <- sequence $ map (bandBox palette) boxes
+  boxDraws <-
+    sequence $
+    map
+      (\b -> do
+         colour <- fgColour palette
+         return $ do
+           setColour (colour, 0.5 :: Double)
+           draw b
+           fill)
+      boxSands
   return $ do
     setColour colour
     setLineWidth 1
-    foldr (>>) (pure ()) bandBoxes
+    foldr (>>) (pure ()) boxDraws
 
 main :: IO ()
 main = do

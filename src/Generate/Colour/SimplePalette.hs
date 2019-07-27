@@ -12,6 +12,7 @@ module Generate.Colour.SimplePalette
   , monoPastelRed
   , monoPastelPurple
   , monoPastelBlue
+  , mondrian
   ) where
 
 import Data.Colour.SRGB
@@ -44,6 +45,8 @@ jhoto =
 
 castle =
   mkSimplePalette "FFFFFF" ["C74894", "FDDCB7", "F75856", "66AA79", "07444D"]
+
+mondrian = mkSimplePalette "f9f9f9" ["fff001", "ff0101", "0101fd", "101010"]
 
 mote =
   mkSimplePalette "EECDB6" ["A83250", "13192C", "8D4C33", "E08752", "A83250"]

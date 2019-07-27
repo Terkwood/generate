@@ -52,6 +52,7 @@ dependencies:
 - utility-ht
 - vector-algorithms
 - data-default
+- extra
 
 
 default-extensions:

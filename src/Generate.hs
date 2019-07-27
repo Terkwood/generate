@@ -1,5 +1,6 @@
 module Generate
   ( module Control.Monad.Extra
+  , concatMapM
   , module Control.Monad.Reader
   , module Data.Colour.SRGB
   , module Data.List
@@ -26,6 +27,7 @@ module Generate
   ) where
 
 import Control.Monad.Extra
+import Control.Monad.Extra2 (concatMapM)
 import Control.Monad.Reader
 import Data.Colour.SRGB
 import Data.Default
