@@ -8,9 +8,16 @@ module Generate.Draw
 import Graphics.Rendering.Cairo
 
 import Generate.Monad
+import Linear
 
 class Drawable d where
   draw :: d -> Render ()
+
+instance Drawable [V2 Double] where
+  draw points = do
+    let (V2 x y) = head points
+    moveTo x y
+    foldr (>>) (pure ()) $ map (\(V2 x y) -> lineTo x y) $ tail points
 
 class Element e where
   realize :: e -> Generate (Render ())

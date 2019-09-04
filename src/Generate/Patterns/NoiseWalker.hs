@@ -73,10 +73,7 @@ _stepNoiseWalker start (left, path, w@(NoiseWalker _ step)) = do
           then [(theta, start)]
           else path
   let next = circumPoint last theta step
-  return $
-    if withinRect frame next
-      then Just (left - 1, (theta, next) : path', w)
-      else Just (0, path', w)
+  return $ Just $ (left - 1, (theta, next) : path', w)
 
 data SquigglyPathCfg = SquigglyPathCfg
   { walkerCfg :: NoiseWalkerCfg

@@ -98,11 +98,12 @@ flatWaterColour ::
      (Translucent wc, Wiggle wc)
   => Double
   -> Int
-  -> Wiggler
+  -> (Int -> Generate Wiggler)
   -> wc
   -> Generate [wc]
 flatWaterColour opacity layerCount wiggler source = do
-  layers <- sequence $ map (const $ wiggle wiggler source) [1 .. layerCount]
+  wigglers <- sequence $ map wiggler [1 .. layerCount]
+  layers <- sequence $ map (\w -> wiggle w source) wigglers
   return $ map (setOpacity opacity) layers
 
 data WaterColourCfg = WaterColourCfg
@@ -117,8 +118,8 @@ instance Default WaterColourCfg where
     WaterColourCfg
       { layerCount = 10
       , layerOpacity = 0.1
-      , depthOfBranch = 4
-      , depthPerBranch = 2
+      , depthOfBranch = 3
+      , depthPerBranch = 1
       }
 
 waterColour ::

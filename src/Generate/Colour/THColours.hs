@@ -28,8 +28,8 @@ data THColours = THColours
 mkTHColours :: SimplePalette -> Generate THColours
 mkTHColours (SimplePalette _ fgPalette) = do
   frame <- fullFrame
-  huePoints <- V.sequence $ V.generate 40 $ const $ spatialSample frame
-  valuePoints <- V.sequence $ V.generate 40 $ const $ spatialSample frame
+  huePoints <- V.sequence $ V.generate 10 $ const $ spatialSample frame
+  valuePoints <- V.sequence $ V.generate 10 $ const $ spatialSample frame
   huePoints' <-
     V.sequence $
     V.map (\p -> randElem fgPalette >>= \c -> return (p, hue c)) huePoints
