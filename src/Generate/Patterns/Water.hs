@@ -12,7 +12,7 @@ module Generate.Patterns.Water
   , radialWiggler
   ) where
 
-import Control.Monad.Extra
+import "monad-extras" Control.Monad.Extra
 import Data.Colour.SRGB
 import Data.Default
 import Data.Maybe
@@ -47,10 +47,11 @@ instance Wiggle Line where
 class Translucent t where
   setOpacity :: Double -> t -> t
 
-data Splotch = Splotch
-  { poly :: Line
-  , colour :: (RGB Double, Double)
-  }
+data Splotch =
+  Splotch
+    { poly :: Line
+    , colour :: (RGB Double, Double)
+    }
 
 instance Wiggle Splotch where
   wiggle w s@(Splotch poly _) = do
@@ -106,12 +107,13 @@ flatWaterColour opacity layerCount wiggler source = do
   layers <- sequence $ map (\w -> wiggle w source) wigglers
   return $ map (setOpacity opacity) layers
 
-data WaterColourCfg = WaterColourCfg
-  { layerCount :: Int
-  , layerOpacity :: Double
-  , depthOfBranch :: Int
-  , depthPerBranch :: Int
-  }
+data WaterColourCfg =
+  WaterColourCfg
+    { layerCount :: Int
+    , layerOpacity :: Double
+    , depthOfBranch :: Int
+    , depthPerBranch :: Int
+    }
 
 instance Default WaterColourCfg where
   def =

@@ -2,7 +2,7 @@ module Generate.Filter.Fair
   ( fairFilter
   ) where
 
-import Control.Monad.Extra
+import "extra" Control.Monad.Extra
 
 import Generate.Monad
 

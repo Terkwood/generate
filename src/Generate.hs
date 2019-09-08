@@ -1,8 +1,8 @@
 module Generate
   ( module Control.Monad.Extra
-  , concatMapM
   , module Control.Monad.Reader
   , module Data.Colour.SRGB
+  , module Data.Colour.RGBSpace.HSV
   , module Data.List
   , module Data.List.Split
   , module Data.Maybe
@@ -16,6 +16,7 @@ module Generate
   , module Generate.Colour
   , module Generate.Coord
   , module Generate.Draw
+  , module Generate.Compositing
   , module Generate.Geom
   , module Generate.Geom.Circle
   , module Generate.Geom.Rect
@@ -26,9 +27,10 @@ module Generate
   , module Generate.Runner
   ) where
 
-import Control.Monad.Extra
-import Control.Monad.Extra2 (concatMapM)
+import "monad-extras" Control.Monad.Extra
+import "extra" Control.Monad.Extra (concatMapM)
 import Control.Monad.Reader
+import Data.Colour.RGBSpace.HSV
 import Data.Colour.SRGB
 import Data.Default
 import Data.List
@@ -39,6 +41,7 @@ import Data.RVar
 import Data.Random.Distribution.Normal
 import Data.Random.Distribution.Uniform
 import Generate.Colour
+import Generate.Compositing
 import Generate.Coord
 import Generate.Draw
 import Generate.Filter.Fair

@@ -3,7 +3,7 @@ module Generate.Raster.Sand
   , SandCfg(..)
   ) where
 
-import Control.Monad.Extra
+import "monad-extras" Control.Monad.Extra
 import Data.Default
 import Linear
 
@@ -13,10 +13,11 @@ import Generate.Geom.Circle
 import Generate.Monad
 import Generate.Patterns.Sampling
 
-data SandCfg = SandCfg
-  { attempts :: Int
-  , mkElement :: V2 Double -> Generate Circle
-  }
+data SandCfg =
+  SandCfg
+    { attempts :: Int
+    , mkElement :: V2 Double -> Generate Circle
+    }
 
 instance Default SandCfg where
   def = SandCfg {attempts = 1000, mkElement = \p -> pure $ Circle p 2}

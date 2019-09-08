@@ -6,7 +6,7 @@ module Generate.Patterns.NoiseWalker
   , squigglyPath
   ) where
 
-import Control.Monad.Extra
+import "monad-extras" Control.Monad.Extra
 import Control.Monad.Reader
 import Data.Default
 import Data.Maybe
@@ -21,15 +21,17 @@ import Generate.Geom.Line
 import Generate.Geom.Rect
 import Generate.Monad
 
-data NoiseWalker = NoiseWalker
-  { scale :: Double
-  , step :: Double
-  }
+data NoiseWalker =
+  NoiseWalker
+    { scale :: Double
+    , step :: Double
+    }
 
-data NoiseWalkerCfg = NoiseWalkerCfg
-  { scale :: RVar Double
-  , step :: RVar Double
-  }
+data NoiseWalkerCfg =
+  NoiseWalkerCfg
+    { scale :: RVar Double
+    , step :: RVar Double
+    }
 
 instance Default NoiseWalkerCfg where
   def =
@@ -75,11 +77,12 @@ _stepNoiseWalker start (left, path, w@(NoiseWalker _ step)) = do
   let next = circumPoint last theta step
   return $ Just $ (left - 1, (theta, next) : path', w)
 
-data SquigglyPathCfg = SquigglyPathCfg
-  { walkerCfg :: NoiseWalkerCfg
-  , length :: Int
-  , start :: V2 Double
-  }
+data SquigglyPathCfg =
+  SquigglyPathCfg
+    { walkerCfg :: NoiseWalkerCfg
+    , length :: Int
+    , start :: V2 Double
+    }
 
 instance Default SquigglyPathCfg where
   def = SquigglyPathCfg {walkerCfg = def, length = 30, start = V2 0 0}

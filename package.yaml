@@ -77,6 +77,7 @@ default-extensions:
 - MultiParamTypeClasses
 - TypeFamilies
 - DisambiguateRecordFields
+- PackageImports
 
 
 library:
@@ -91,16 +92,5 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -O3
-    dependencies:
-    - generate
-
-tests:
-  generate-test:
-    main:                Spec.hs
-    source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
     dependencies:
     - generate
