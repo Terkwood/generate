@@ -15,6 +15,7 @@ import Generate.Patterns.Maze
 import Generate.Patterns.Sampling
 import Generate.Patterns.Water
 import Petal
+import qualified Streaming.Prelude as S
 
 ramp :: Int -> [Double]
 ramp total = map valueOf [0 .. total]
@@ -38,10 +39,39 @@ background palette = do
     rectangle 0 0 width height
     fill
 
+bgStream :: Stream (Render ())
+bgStream = do
+  palette <- lift $ mkPalette
+  render <- lift $ background palette
+  S.yield render
+
+data Dot =
+  Dot
+    { circle :: Circle
+    , value :: Double
+    , alpha :: Double
+    }
+
+randomCircle :: Generate Dot
+randomCircle = do
+  frame <- fullFrame >>= return . (scaleFromCenter 0.5)
+  center <- spatialSample frame
+  value <- sampleRVar $ uniform 0.3 1.0
+  alpha <- sampleRVar $ uniform 0.1 1.0
+  return $ Dot (Circle center 0.5) value alpha
+
+circles :: Int -> Stream Dot
+circles n = streamGenerates $ map (const $ randomCircle) [0 .. n]
+
+drawCircle :: Dot -> Render ()
+drawCircle (Dot c v a) = do
+  setSourceRGBA v v v a
+  draw c
+  fill
+
+circleStream :: Stream (Render ())
+circleStream = S.map (drawCircle) $ circles 30000
+
 main :: IO ()
 main = do
-  runInvocation $ do
-    palette <- mkPalette
-    fgPalette <- mkTHColours palette
-    bg <- background palette
-    return $ bg
+  runInvocation $ bgStream >> circleStream

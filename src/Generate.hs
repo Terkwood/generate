@@ -23,6 +23,7 @@ module Generate
   , module Generate.Geom.Line
   , module Generate.Geom.Spline
   , module Generate.Monad
+  , module Generate.Stream
   , module Generate.Filter.Fair
   , module Generate.Runner
   ) where
@@ -52,5 +53,6 @@ import Generate.Geom.Rect
 import Generate.Geom.Spline
 import Generate.Monad
 import Generate.Runner
+import Generate.Stream
 import Graphics.Rendering.Cairo
 import Math.Noise

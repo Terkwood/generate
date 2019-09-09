@@ -1,10 +1,7 @@
 module Generate.Render
   ( RenderSpec(..)
-  , RenderJob(..)
   , mkRender
-  , getRenderedFrame
-  , getRender
-  , render
+  , renderFrame
   ) where
 
 import Control.Monad.Reader
@@ -19,54 +16,48 @@ import Data.Random.Source.PureMT
 import qualified Data.Vector as V
 import Graphics.Rendering.Cairo
 import Math.Noise.Modules.Perlin
+import qualified Streaming as S
+import qualified Streaming.Prelude as S
 
 import Generate.Monad
+import Generate.Stream
 
-data RenderSpec a = RenderSpec
-  { renderCtx :: Int -> Context
-  , renderInitState :: Generate a
-  , renderRealizer :: a -> Generate (Render ())
-  , renderStepper :: a -> Generate a
-  , renderEndFrame :: Int
-  , renderBrainstorm :: Bool
-  , renderDimensions :: (Int, Int)
-  , renderRNG :: PureMT
-  }
-
-data RenderJob a = RenderJob
-  { spec :: RenderSpec a
-  , cachedFrames :: H.BasicHashTable Int Surface
-  , cachedStates :: H.BasicHashTable Int a
-  }
+data RenderSpec a =
+  RenderSpec
+    { renderCtx :: Int -> Context
+    , renderInitState :: Generate a
+    , renderRealizer :: a -> Stream (Render ())
+    , renderStepper :: a -> Generate a
+    , renderEndFrame :: Int
+    , renderBrainstorm :: Bool
+    , renderDimensions :: (Int, Int)
+    , renderRNG :: PureMT
+    , renderLastState :: Generate a
+    }
 
 mkRender ::
      World
   -> Generate a
-  -> (a -> Generate (Render ()))
+  -> (a -> Stream (Render ()))
   -> (a -> Generate a)
   -> Int
   -> Bool
   -> Int
-  -> IO (RenderJob a)
+  -> IO (RenderSpec a)
 mkRender world initState realizer stepper endFrame brainstorm seed = do
-  spec <- spec
-  cachedFrames <- H.new
-  cachedStates <- H.new
-  return $ RenderJob spec cachedFrames cachedStates
-  where
-    spec = do
-      renderCtx <- newIORef ()
-      return
-        RenderSpec
-          { renderCtx = \frame -> Context world frame (mkNoise seed) seed
-          , renderInitState = initState
-          , renderRealizer = realizer
-          , renderStepper = stepper
-          , renderEndFrame = endFrame
-          , renderBrainstorm = brainstorm
-          , renderDimensions = scaledDimensions world
-          , renderRNG = pureMT $ fromInteger $ toInteger seed
-          }
+  renderCtx <- newIORef ()
+  return
+    RenderSpec
+      { renderCtx = \frame -> Context world frame (mkNoise seed) seed
+      , renderInitState = initState
+      , renderRealizer = realizer
+      , renderStepper = stepper
+      , renderEndFrame = endFrame
+      , renderBrainstorm = brainstorm
+      , renderDimensions = scaledDimensions world
+      , renderRNG = pureMT $ fromInteger $ toInteger seed
+      , renderLastState = initState
+      }
 
 mkNoise :: Int -> Perlin
 mkNoise seed =
@@ -78,37 +69,35 @@ mkNoise seed =
     , perlinFrequency = 1
     }
 
-getRender :: RenderJob a -> Int -> IO (Generate (Render ()))
-getRender job frame = do
-  let RenderSpec {..} = spec job
-  let ctx = renderCtx frame
-  cachedPreviousState <- H.lookup (cachedStates job) $ frame - 1
-  let state =
-        case cachedPreviousState of
-          Just cached -> runGenerate ctx renderRNG $ renderStepper cached
-          Nothing -> runGenerate ctx renderRNG renderInitState
-  H.insert (cachedStates job) frame state
+getRender :: RenderSpec a -> Int -> Generate (Stream (Render ()))
+getRender (RenderSpec {..}) frame = do
+  state <-
+    if frame == 0
+      then renderInitState
+      else renderLastState
   return $ renderRealizer state
 
-getRenderedFrame :: RenderJob a -> Int -> IO Surface
-getRenderedFrame job frame = do
-  cached <- H.lookup (cachedFrames job) frame
-  layers <- getRender job frame
-  case cached of
-    Just cached -> return cached
-    Nothing -> do
-      let (w, h) = renderDimensions $ spec job
-      surface <- createImageSurface FormatARGB32 w h
-      render (spec job) layers frame surface
-      return surface
+renderFrame :: RenderSpec a -> Int -> IO Surface
+renderFrame spec@(RenderSpec {renderDimensions = (w, h), ..}) frame = do
+  let layers :: Stream (Render ()) = realize $ getRender spec frame
+  surface <- createImageSurface FormatARGB32 w h
+  let scale = scaleFactor $ world ctx
+  prepareSurface scale surface
+  S.mapM_ pure $ runStream scale ctx renderRNG layers surface
+  return surface
+  where
+    realize :: Generate a -> a
+    realize = fst . (runGenerate ctx renderRNG)
+    ctx = renderCtx frame
 
-render :: RenderSpec a -> Generate (Render ()) -> Int -> Surface -> IO ()
-render RenderSpec {..} layers frame surface = do
-  let ctx = renderCtx frame
+realizeCommand :: Surface -> Render () -> IO ()
+realizeCommand surface cmd = renderWith surface cmd
+
+prepareSurface :: Double -> Surface -> IO ()
+prepareSurface scaleFactor surface =
   renderWith surface $ do
     setAntialias AntialiasBest
-    scale (scaleFactor (world ctx)) (scaleFactor (world ctx))
+    scale scaleFactor scaleFactor
     setSourceRGBA 0 0 0 1
     rectangle 0 0 500 500
     fill
-    runGenerate ctx renderRNG layers

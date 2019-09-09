@@ -35,12 +35,13 @@ import Options
 import Generate.Cmdline
 import Generate.Monad
 import Generate.Render
+import Generate.Stream
 
-runInvocation :: Generate (Render ()) -> IO ()
-runInvocation layers = runStatefulInvocation layers (return) (const layers)
+runInvocation :: Stream (Render ()) -> IO ()
+runInvocation layers = runStatefulInvocation (pure ()) (const $ layers) (return)
 
 runStatefulInvocation ::
-     Generate a -> (a -> Generate (Render ())) -> (a -> Generate a) -> IO ()
+     Generate a -> (a -> Stream (Render ())) -> (a -> Generate a) -> IO ()
 runStatefulInvocation initState realizer stepper =
   runCommand $ \opts args -> do
     seed <-
@@ -66,74 +67,67 @@ runStatefulInvocation initState realizer stepper =
 timeSeed :: IO (Int)
 timeSeed = getPOSIXTime >>= \t -> return $ round . (* 1000) $ t
 
-screen :: Int -> (Int -> IO (RenderJob a)) -> IO ()
+screen :: Int -> (Int -> IO (RenderSpec a)) -> IO ()
 screen seed renderFactory = do
   initGUI
   window <- windowNew
   glCfg <- glConfigNew [GLModeRGBA, GLModeDouble]
   drawingArea <- glDrawingAreaNew glCfg
-  job <- renderFactory seed
-  jobRef <- newIORef $ job
+  spec@(RenderSpec {..}) <- renderFactory seed
+  specRef <- newIORef $ spec
   frameRef <- newIORef 0
   containerAdd window drawingArea
-  timeoutAdd (renderToScreen drawingArea frameRef jobRef) 16
-  window `onKeyPress` ui frameRef jobRef renderFactory
+  timeoutAdd (renderToScreen drawingArea frameRef specRef) 16
+  window `onKeyPress` ui frameRef specRef renderFactory
   window `onDestroy` mainQuit
-  uncurry (windowSetDefaultSize window) $ (renderDimensions . spec) job
+  uncurry (windowSetDefaultSize window) renderDimensions
   widgetShowAll window
   mainGUI
 
-file :: String -> Int -> (Int -> IO (RenderJob a)) -> IO ()
+file :: String -> Int -> (Int -> IO (RenderSpec a)) -> IO ()
 file path seed renderFactory = do
-  job <- renderFactory seed
+  spec@(RenderSpec {..}) <- renderFactory seed
   seedRef <- newIORef seed
   let brainStorm = do
         modifyIORef seedRef (+ 1)
         seed <- readIORef seedRef
-        job <- renderFactory seed
-        let spec' = spec job
-        seedToFile path job {spec = spec' {renderEndFrame = 1}}
-  if renderBrainstorm $ spec $ job
-    then V.foldr1 (>>) $
-         V.generate (renderEndFrame $ spec $ job) $ const brainStorm
-    else seedToFile path job
+        seedToFile path $ spec {renderEndFrame = 1}
+  if renderBrainstorm
+    then V.foldr1 (>>) $ V.generate renderEndFrame $ const brainStorm
+    else seedToFile path spec
 
-seedToFile :: String -> RenderJob a -> IO ()
-seedToFile path job = do
-  let RenderSpec {renderEndFrame, renderCtx, ..} = spec job
+seedToFile :: String -> RenderSpec a -> IO ()
+seedToFile path spec@(RenderSpec {..}) = do
   let seed' = seed $ renderCtx 0
   let (w, h) = renderDimensions
   let writeFrame i = do
         let filePath =
               path ++ "__" ++ (show seed') ++ "__" ++ (show i) ++ ".png"
-        layers <- getRender job i
-        surface <- createImageSurface FormatARGB32 w h
-        render (spec job) layers i surface
+        surface <- renderFrame spec i
         surfaceWriteToPNG surface filePath
   sequence $ map (writeFrame) [0 .. renderEndFrame - 1]
   return ()
 
-renderToScreen :: GLDrawingArea -> IORef Int -> IORef (RenderJob a) -> IO Bool
-renderToScreen da frameRef jobRef = do
+renderToScreen :: GLDrawingArea -> IORef Int -> IORef (RenderSpec a) -> IO Bool
+renderToScreen da frameRef specRef = do
   dw <- widgetGetDrawWindow da
   frame <- readIORef frameRef
-  job <- readIORef jobRef
-  surface <- getRenderedFrame job frame
-  modifyIORef frameRef (\frame -> (frame + 1) `mod` (renderEndFrame $ spec job))
-  let (width, height) = (renderDimensions . spec) job
+  spec@(RenderSpec {renderDimensions = (w, h), ..}) <- readIORef specRef
+  surface <- renderFrame spec frame
+  modifyIORef frameRef (\frame -> (frame + 1) `mod` renderEndFrame)
   renderWithDrawable dw $ do
     setSourceSurface surface 0 0
-    Cairo.rectangle 0 0 (fromIntegral width) (fromIntegral height)
+    Cairo.rectangle 0 0 (fromIntegral w) (fromIntegral h)
     fill
   return True
 
 ui ::
      IORef Int
-  -> IORef (RenderJob a)
-  -> (Int -> IO (RenderJob a))
+  -> IORef (RenderSpec a)
+  -> (Int -> IO (RenderSpec a))
   -> Event
   -> IO Bool
-ui frameRef jobRef renderFactory (Key {eventKeyVal, ..}) = do
+ui frameRef specRef renderFactory (Key {eventKeyVal, ..}) = do
   case eventKeyVal of
     65307 -> mainQuit
     65507 -> mainQuit
@@ -141,8 +135,8 @@ ui frameRef jobRef renderFactory (Key {eventKeyVal, ..}) = do
       modifyIORef frameRef (const 0)
       newSeed <- timeSeed
       putStrLn $ "New seed is: " ++ (show newSeed)
-      newJob <- renderFactory newSeed
-      modifyIORef jobRef (const newJob)
+      newSpec <- renderFactory newSeed
+      modifyIORef specRef (const newSpec)
     _ -> return ()
   return True
 ui _ _ _ _ = return True

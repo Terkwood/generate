@@ -53,6 +53,7 @@ dependencies:
 - vector-algorithms
 - data-default
 - extra
+- streaming
 
 
 default-extensions:
