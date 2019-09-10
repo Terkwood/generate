@@ -19,17 +19,18 @@ import Generate.Geom.Rect
 import Generate.Monad
 import Generate.Patterns.Sampling
 
-data THColours = THColours
-  { huePoints :: V.Vector (V2 Double, Double)
-  , valuePoints :: V.Vector (V2 Double, Double)
-  , palette :: V.Vector (RGB Double)
-  }
+data THColours =
+  THColours
+    { huePoints :: V.Vector (V2 Double, Double)
+    , valuePoints :: V.Vector (V2 Double, Double)
+    , palette :: V.Vector (RGB Double)
+    }
 
 mkTHColours :: SimplePalette -> Generate THColours
 mkTHColours (SimplePalette _ fgPalette) = do
   frame <- fullFrame
-  huePoints <- V.sequence $ V.generate 10 $ const $ spatialSample frame
-  valuePoints <- V.sequence $ V.generate 10 $ const $ spatialSample frame
+  huePoints <- V.sequence $ V.generate 30 $ const $ spatialSample frame
+  valuePoints <- V.sequence $ V.generate 30 $ const $ spatialSample frame
   huePoints' <-
     V.sequence $
     V.map (\p -> randElem fgPalette >>= \c -> return (p, hue c)) huePoints

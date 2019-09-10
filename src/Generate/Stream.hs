@@ -3,6 +3,7 @@ module Generate.Stream
   , liftGenerate
   , runStream
   , streamGenerates
+  , unfoldGenerates
   ) where
 
 import Control.Monad
@@ -46,6 +47,16 @@ _runStream state@(RunState {..}) =
         scale scaleFactor scaleFactor
         renderCmd
       return $ Right ((), state {rng = rng', stream = rest})
+
+unfoldGenerates :: Generate [a] -> Stream a
+unfoldGenerates generates = S.unfoldr _unfoldGenerates generates
+
+_unfoldGenerates :: Generate [a] -> Generate (Either () (a, Generate [a]))
+_unfoldGenerates generates = do
+  gs <- generates
+  case gs of
+    [] -> pure $ Left ()
+    g:gs -> return $ Right (g, return $ gs)
 
 streamGenerates :: [Generate a] -> Stream a
 streamGenerates = S.sequence . S.each

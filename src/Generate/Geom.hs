@@ -19,15 +19,23 @@ class Poly p where
   fromVertices :: V.Vector (V2 Double) -> Maybe p
 
 class Points v where
-  points :: v -> V.Vector (V2 Double)
+  points :: v -> [V2 Double]
 
 instance Points (V.Vector (V2 Double)) where
-  points = id
+  points = V.toList
 
 class Subdivisible s where
   subdivide :: s -> s
   subdivideN :: Int -> s -> s
   subdivideN n start = iterate subdivide start !! n
+
+instance Subdivisible [V2 Double] where
+  subdivide vs =
+    if null vs
+      then []
+      else concat $
+           map (\(a, b) -> [a, b]) $
+           zip vs $ zipWith midpoint vs $ (tail vs) ++ [head vs]
 
 class Center c where
   center :: c -> V2 Double

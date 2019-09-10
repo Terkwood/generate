@@ -24,11 +24,13 @@ import Generate.Geom.Line
 import Generate.Monad
 import Generate.Patterns.Sampling
 
-data Rect = Rect
-  { topLeft :: V2 Double
-  , rectWidth :: Double
-  , rectHeight :: Double
-  } deriving (Eq, Show)
+data Rect =
+  Rect
+    { topLeft :: V2 Double
+    , rectWidth :: Double
+    , rectHeight :: Double
+    }
+  deriving (Eq, Show)
 
 instance Sample Rect where
   spatialSample (Rect (V2 tlx tly) w h) = do
@@ -63,25 +65,24 @@ instance Lines Rect where
 
 instance Points Rect where
   points (Rect tl@(V2 tlx tly) w h) =
-    V.fromList $
     [tl, V2 (tlx + w) tly, V2 (tlx + w) (tly + h), V2 tlx (tly + h)]
 
--- this is broke
 instance Split Rect where
-  splitOnAxis axis t (Rect tl@(V2 x y) w h) = (Rect tl w1 h1, Rect tl2 w2 h2)
+  splitOnAxis axis t (Rect tl@(V2 x y) w h) =
+    case axis of
+      X -> splitOnX
+      Y -> splitOnY
     where
-      tl2 =
-        case axis of
-          X -> V2 (x + w1) y
-          Y -> V2 x (y + h1)
-      (w1, w2) =
-        case axis of
-          X -> (w * t, w * (1 - t))
-          Y -> (w, w)
-      (h1, h2) =
-        case axis of
-          X -> (h, h)
-          Y -> (h * t, h * (1 - t))
+      splitOnX = (Rect tl w' h, Rect (V2 x2 y) w2 h)
+        where
+          w' = w * t
+          w2 = w - w'
+          x2 = x + w'
+      splitOnY = (Rect tl w h', Rect (V2 x y2) w h2)
+        where
+          h' = h * t
+          h2 = h - h'
+          y2 = y + h'
 
 fullFrame :: Generate Rect
 fullFrame = do

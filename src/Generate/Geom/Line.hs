@@ -26,7 +26,7 @@ class Lines a where
 
 mkLine :: Points p => p -> Maybe Line
 mkLine p =
-  let ps = points p
+  let ps = V.fromList $ points p
    in if V.length ps >= 2
         then Just $ Line ps
         else Nothing

@@ -89,9 +89,16 @@ file path seed renderFactory = do
   spec@(RenderSpec {..}) <- renderFactory seed
   seedRef <- newIORef seed
   let brainStorm = do
-        modifyIORef seedRef (+ 1)
-        seed <- readIORef seedRef
-        seedToFile path $ spec {renderEndFrame = 1}
+        newSeed <- timeSeed
+        writeIORef seedRef newSeed
+        seedToFile path $
+          spec
+            { renderCtx =
+                \frame ->
+                  let ctx = renderCtx frame
+                   in ctx {seed = newSeed, noise = mkNoise newSeed}
+            , renderEndFrame = 1
+            }
   if renderBrainstorm
     then V.foldr1 (>>) $ V.generate renderEndFrame $ const brainStorm
     else seedToFile path spec
@@ -106,6 +113,7 @@ seedToFile path spec@(RenderSpec {..}) = do
         surface <- renderFrame spec i
         surfaceWriteToPNG surface filePath
   sequence $ map (writeFrame) [0 .. renderEndFrame - 1]
+  putStrLn $ "Wrote" ++ (show seed') ++ "to file"
   return ()
 
 renderToScreen :: GLDrawingArea -> IORef Int -> IORef (RenderSpec a) -> IO Bool

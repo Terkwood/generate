@@ -1,6 +1,7 @@
 module Generate.Render
   ( RenderSpec(..)
   , mkRender
+  , mkNoise
   , renderFrame
   ) where
 
