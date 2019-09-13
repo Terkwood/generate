@@ -2,7 +2,6 @@ module Generate.Patterns.Grid
   ( GridCfg(..)
   , TileFocus(..)
   , grid
-  , gridCfgDefault
   , gridCoords
   , gridPixels
   , gridVec
@@ -10,6 +9,7 @@ module Generate.Patterns.Grid
   ) where
 
 import Control.Monad.Reader
+import Data.Default
 import Data.Maybe
 import qualified Data.Vector as V
 import Linear
@@ -35,30 +35,32 @@ focalPoint width height focus (V2 topLeftX topLeftY) =
     BottomLeft -> V2 topLeftX (topLeftY + height)
     BottomRight -> V2 (topLeftX + width) (topLeftY + height)
 
-data GridCfg = GridCfg
-  { rows :: Int
-  , cols :: Int
-  , width :: Maybe Double
-  , height :: Maybe Double
-  , topLeft :: V2 Double
-  , tileFocus :: TileFocus
-  }
-
-gridCfgDefault =
+data GridCfg =
   GridCfg
-    { rows = 10
-    , cols = 10
-    , width = Nothing
-    , height = Nothing
-    , topLeft = V2 0 0
-    , tileFocus = Center
+    { rows :: Int
+    , cols :: Int
+    , width :: Maybe Double
+    , height :: Maybe Double
+    , topLeft :: V2 Double
+    , tileFocus :: TileFocus
     }
+
+instance Default GridCfg where
+  def =
+    GridCfg
+      { rows = 10
+      , cols = 10
+      , width = Nothing
+      , height = Nothing
+      , topLeft = V2 0 0
+      , tileFocus = Center
+      }
 
 gridPixels :: Int -> Generate [V2 Double]
 gridPixels subpixelOrder = do
   World {width, height, scaleFactor, ..} <- asks world
   grid
-    gridCfgDefault
+    def
       { rows = subpixelOrder * (round $ width * scaleFactor)
       , cols = subpixelOrder * (round $ height * scaleFactor)
       , tileFocus = TopLeft

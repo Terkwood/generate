@@ -13,12 +13,13 @@ import Generate.Geom.Circle
 import Generate.Geom.Rect
 import Generate.Monad
 
-data CircleSearch = CircleSearch
-  { circleSearchTree :: Q.QuadTree Circle
-  , circleSearchFoundCircles :: [Circle]
-  , circleSearchRemainingAttempts :: Int
-  , circleSearchSearchPattern :: Generate Circle
-  }
+data CircleSearch =
+  CircleSearch
+    { circleSearchTree :: Q.QuadTree Circle
+    , circleSearchFoundCircles :: [Circle]
+    , circleSearchRemainingAttempts :: Int
+    , circleSearchSearchPattern :: Generate Circle
+    }
 
 mkSearch :: Int -> Rect -> Generate Circle -> CircleSearch
 mkSearch n frame pattern =

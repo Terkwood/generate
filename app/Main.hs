@@ -5,6 +5,7 @@ import Linear hiding (rotate)
 import System.IO.Unsafe
 
 import Generate
+import qualified Generate.Algo.CirclePack as P
 import qualified Generate.Algo.QuadTree as Q
 import qualified Generate.Algo.Vec as V
 import Generate.Colour.SimplePalette
@@ -49,165 +50,107 @@ bgStream = do
   render <- lift $ background palette
   S.yield render
 
-data Dot =
-  Dot
-    { circle :: Circle
-    , colour :: (RGB Double, Double)
-    }
-
-randomCircle :: State -> Generate Dot
-randomCircle State {..} = do
-  let fgColours = (\(SimplePalette _ fg) -> fg) palette
-  let fgColourCount = V.length fgColours
-  frame <- fullFrame >>= return . (scaleFromCenter 0.7)
-  center@(V2 x y) <- spatialSample frame
-  alpha <- sampleRVar $ uniform 0.1 6.0
-  noise <- noiseSample $ fmap (/ noiseScale) $ V3 x y 1
-  colourShift <- sampleRVar $ normal 0 1
-  let colourIdx =
-        floor $ (fromIntegral fgColourCount) * abs (noise + colourShift)
-  let colour = fgColours V.! (colourIdx `mod` fgColourCount)
-  let (h, s, _) = hsvView colour
-  hueDelta <- sampleRVar $ normal 0 0.2
-  let hue = h + hueDelta
-  let value = abs noise / 2 + 0.5
-  let theta = pi * noise
-  let center' = circumPoint center theta (noise * 40)
-  let alpha' =
-        if (floor $ (y + bandPhase) / bandHeight) `mod` 2 == 0
-          then alpha
-          else 0.0
-  return $ Dot (Circle center' 0.1) (hsv hue s value, alpha')
-
-circles :: State -> Stream Dot
-circles state@(State {..}) =
-  streamGenerates $ map (const $ randomCircle state) [0 .. circleCount]
-
-drawCircle :: Dot -> Render ()
-drawCircle (Dot c col) = do
-  setColour col
-  draw c
-  fill
-
-circleStream :: State -> Stream (Render ())
-circleStream state = S.map (drawCircle) $ circles state
-
-data Box =
-  Box
-    { rect :: Generate [V2 Double]
-    , colour :: (RGB Double, Double)
-    }
-
-instance Element Box where
-  realize (Box rect colour) = do
-    vs <- rect
-    mode :: Double <- sampleRVar $ uniform 0 1
-    let realizer =
-          if mode < 0.1
-            then fill
-            else stroke
-    return $ do
-      setColour colour
-      draw vs
-      closePath
-      setLineWidth 0.1
-      realizer
-      newPath
-
-instance Translucent Box where
-  setOpacity opacity box@(Box _ (c, _)) = box {colour = (c, opacity)}
-
-instance Subdivisible Box where
-  subdivide box@(Box rect _) = box {rect = rect >>= return . subdivide}
-
-instance Wiggle Box where
-  wiggle (Wiggler f) box@(Box rect _) = do
-    return $ box {rect = rect >>= sequence . (map f)}
-
-mkBox :: SimplePalette -> Rect -> Generate Box
-mkBox palette rect = do
-  colour <- fgColour palette
-  return $ subdivideN 3 $ Box (pure $ points rect) (colour, 1.0)
-
-boxStream :: State -> Stream Box
-boxStream State {..} = S.concat water
-  where
-    water :: Stream [Box]
-    water = S.mapM warper outlines
-    outlines :: Stream Box
-    outlines =
-      S.mapM (mkBox palette) $ unfoldGenerates $ recursiveSplit splitCfg frame
-
 data State =
   State
     { palette :: SimplePalette
-    , noiseScale :: Double
-    , circleCount :: Int
-    , bandHeight :: Double
-    , bandPhase :: Double
-    , frame :: Rect
-    , splitCfg :: RecursiveSplitCfg
-    , warper :: Box -> Generate [Box]
+    , pathOrigin :: V2 Double
     }
-
-mkSplitCfg :: Generate RecursiveSplitCfg
-mkSplitCfg = do
-  meanDepth <- sampleRVar $ uniform 2 5
-  depthVariance <- sampleRVar $ uniform 1 3
-  let depthVar :: Generate Double = sampleRVar $ normal meanDepth depthVariance
-  return $
-    def
-      { shouldContinue =
-          \(SplitStatus p depth) -> do
-            limit <- depthVar
-            return $ (fromIntegral depth) < limit
-      }
-
-mkNoiseWiggler :: Double -> Double -> Double -> Wiggler
-mkNoiseWiggler z strength smoothness =
-  Wiggler $ \p@(V2 x y) -> do
-    let scale = 1 / smoothness
-    let fixSamplePoint = fmap (scale *)
-    theta <-
-      (noiseSample $ fixSamplePoint $ V3 x y z) >>= return . (\x -> x * 2 * pi)
-    r <-
-      (noiseSample $ fixSamplePoint $ V3 x y (negate z)) >>=
-      return . (* strength)
-    return $ circumPoint p theta r
-
-mkWarper :: Box -> Generate [Box]
-mkWarper =
-  let layerWiggler _ = do
-        z <- sampleRVar $ uniform 0 1000
-        strength <- sampleRVar $ normal 0 10
-        smoothness <- sampleRVar $ normal 200 40
-        return $ mkNoiseWiggler z strength smoothness
-   in flatWaterColour 0.02 400 layerWiggler
 
 start :: Generate State
 start = do
   palette <- mkPalette
-  noiseScale <- sampleRVar $ uniform 100 400
-  circleCount <- sampleRVar $ uniform 1000000 2000000
-  bandPhase <- sampleRVar $ uniform 0 200
-  bandHeight <- sampleRVar $ uniform 5 200
-  frameScale <- sampleRVar $ uniform 0.4 0.9
-  frame <- fullFrame >>= return . (scaleFromCenter frameScale)
-  splitCfg <- mkSplitCfg
+  pathOrigin <- centerPoint
+  return $ State {palette = palette, pathOrigin = pathOrigin}
+
+data Step =
+  Step
+    { stepIdx :: Int
+    , theta :: Double
+    , position :: V2 Double
+    , turnTheta :: Double
+    }
+
+data Walker =
+  Walker
+    { agility :: Generate Double
+    , step :: Double
+    }
+
+gaussianWalker :: Double -> Walker
+gaussianWalker strength =
+  Walker {agility = sampleRVar $ normal 0 strength, step = 0.4}
+
+walk :: Walker -> V2 Double -> Stream Step
+walk walker origin =
+  let first = do
+        theta <- sampleRVar $ uniform 0 (2 * pi)
+        return $ Step 0 theta origin pi
+   in S.iterateM (_step walker) first
+
+_step :: Walker -> Step -> Generate Step
+_step (Walker {..}) (Step {..}) = do
+  turn <- agility
+  let (turnTheta', turn') =
+        if theta `mod'` (2 * pi) > turnTheta
+          then ((turnTheta + pi) `mod'` (2 * pi), turn)
+          else (turnTheta, turn' * 2)
+  let theta' = theta + turn
+  let next = circumPoint position theta step
+  return $ Step (stepIdx + 1) theta' next turnTheta'
+
+intersectionPolies :: Stream Step -> Generate [Line]
+intersectionPolies steps = do
+  steps <- S.toList_ steps >>= return . V.fromList
+  frame <- fullFrame
+  let (PolySearch results) = V.foldr (search steps) (PolySearch []) steps
   return $
-    State
-      palette
-      noiseScale
-      circleCount
-      bandHeight
-      bandPhase
-      frame
-      splitCfg
-      mkWarper
+    mapMaybe
+      (\(start, end) -> mkLine $ V.map position $ V.slice start end steps)
+      results
+
+data Shape =
+  Shape
+    { line :: Line
+    }
+
+instance Drawable Shape where
+  draw (Shape line) = do
+    setSourceRGB 0 0 0
+    draw line
+    fill
+
+data PolySearch =
+  PolySearch
+    { found :: [(Int, Int)]
+    }
+
+search :: V.Vector Step -> Step -> PolySearch -> PolySearch
+search vs s@(Step {..}) (PolySearch {..}) =
+  PolySearch $
+  case V.find ((< 1) . (distance position) . (\(Step {..}) -> position)) vs of
+    Just (Step i _ _ _) -> (i, stepIdx - i) : found
+    Nothing -> found
+
+data Dot =
+  Dot
+    { center :: V2 Double
+    }
+
+instance Element Dot where
+  realize (Dot c) = do
+    return $ do
+      setSourceRGB 0 0 0
+      draw $ Circle c 1
+      fill
 
 sketch :: State -> Stream (Render ())
 sketch state@(State {..}) =
-  streamGenerates [background palette] >> S.mapM realize (boxStream state)
+  streamGenerates [background palette] >> unfoldGenerates shapes
+  where
+    shapes :: Generate [Render ()] = do
+      polies :: [Line] <- intersectionPolies $ S.take 10000 steps
+      return $ map (draw . Shape) polies
+    steps = walk (gaussianWalker 0.1) pathOrigin
 
 main :: IO ()
 main = do

@@ -9,6 +9,7 @@ module Generate
   , module Data.Ord
   , module Data.RVar
   , module Data.Default
+  , module Data.Fixed
   , module Data.Random.Distribution.Normal
   , module Data.Random.Distribution.Uniform
   , module Graphics.Rendering.Cairo
@@ -34,6 +35,7 @@ import Control.Monad.Reader
 import Data.Colour.RGBSpace.HSV
 import Data.Colour.SRGB
 import Data.Default
+import Data.Fixed
 import Data.List
 import Data.List.Split
 import Data.Maybe

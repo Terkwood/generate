@@ -1,9 +1,9 @@
 module Generate.Patterns.NoiseWalker
   ( NoiseWalker(..)
   , NoiseWalkerCfg(..)
+  , NoiseStep(..)
   , mkNoiseWalker
-  , SquigglyPathCfg(..)
-  , squigglyPath
+  , walkNoiseWalker
   ) where
 
 import "monad-extras" Control.Monad.Extra
@@ -15,11 +15,13 @@ import Data.Random.Distribution.Normal
 import Data.Random.Distribution.Uniform
 import qualified Data.Vector as V
 import Linear
+import qualified Streaming.Prelude as S
 
 import Generate.Geom.Circle
 import Generate.Geom.Line
 import Generate.Geom.Rect
 import Generate.Monad
+import Generate.Stream
 
 data NoiseWalker =
   NoiseWalker
@@ -33,10 +35,17 @@ data NoiseWalkerCfg =
     , step :: RVar Double
     }
 
+data NoiseStep =
+  NoiseStep
+    { stepIdx :: Int
+    , theta :: Double
+    , position :: V2 Double
+    }
+
 instance Default NoiseWalkerCfg where
   def =
     NoiseWalkerCfg
-      {scale = sampleRVar $ uniform 200 2500, step = sampleRVar $ uniform 5 10}
+      {scale = sampleRVar $ uniform 1 2000, step = sampleRVar $ uniform 5 10}
 
 mkNoiseWalker :: NoiseWalkerCfg -> Generate NoiseWalker
 mkNoiseWalker (NoiseWalkerCfg scaleM stepM) = do
@@ -45,49 +54,21 @@ mkNoiseWalker (NoiseWalkerCfg scaleM stepM) = do
   step <- sampleRVar stepM
   return $ NoiseWalker scale step
 
-stepNoiseWalker ::
-     V2 Double -> Int -> NoiseWalker -> Generate [(Double, V2 Double)]
-stepNoiseWalker start n walker = do
-  (_, path, _) <-
-    iterateMaybeM (_stepNoiseWalker start) (n, [], walker) >>= return . last
-  return $ path
+walkNoiseWalker :: NoiseWalker -> V2 Double -> Stream NoiseStep
+walkNoiseWalker w origin =
+  let first = do
+        theta <- noiseWalkerDir w origin
+        return $ NoiseStep 0 theta origin
+   in S.iterateM (_walkNoiseWalker w) first
+
+_walkNoiseWalker :: NoiseWalker -> NoiseStep -> Generate NoiseStep
+_walkNoiseWalker w@(NoiseWalker _ step) (NoiseStep i theta last@(V2 x y)) = do
+  theta' <- noiseWalkerDir w last
+  let next = circumPoint last theta step
+  return $ NoiseStep (i + 1) theta' next
 
 noiseWalkerDir :: NoiseWalker -> V2 Double -> Generate Double
 noiseWalkerDir (NoiseWalker scale _) (V2 x y) = do
   time <- asks frame >>= return . fromIntegral
   sample <- noiseSample $ V3 (x / scale) (y / scale) (time / scale)
-  return $ (2 *) . (pi *) $ abs sample
-
-_stepNoiseWalker ::
-     V2 Double
-  -> (Int, [(Double, V2 Double)], NoiseWalker)
-  -> Generate (Maybe (Int, [(Double, V2 Double)], NoiseWalker))
-_stepNoiseWalker start (0, _, _) = pure Nothing
-_stepNoiseWalker start (left, path, w@(NoiseWalker _ step)) = do
-  frame <- fullFrame
-  let last@(V2 x y) =
-        if null path
-          then start
-          else snd $ head path
-  theta <- noiseWalkerDir w last
-  let path' =
-        if null path
-          then [(theta, start)]
-          else path
-  let next = circumPoint last theta step
-  return $ Just $ (left - 1, (theta, next) : path', w)
-
-data SquigglyPathCfg =
-  SquigglyPathCfg
-    { walkerCfg :: NoiseWalkerCfg
-    , length :: Int
-    , start :: V2 Double
-    }
-
-instance Default SquigglyPathCfg where
-  def = SquigglyPathCfg {walkerCfg = def, length = 30, start = V2 0 0}
-
-squigglyPath :: SquigglyPathCfg -> Generate Line
-squigglyPath (SquigglyPathCfg cfg n start) = do
-  path <- mkNoiseWalker cfg >>= \w -> stepNoiseWalker start (max n 2) w
-  return $ fromJust $ mkLine $ V.fromList $ map snd path
+  return $ sample * pi * 6
