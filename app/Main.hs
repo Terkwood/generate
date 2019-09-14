@@ -103,20 +103,23 @@ _step (Walker {..}) (Step {..}) = do
 
 intersectionPolies :: Stream Step -> Generate [Line]
 intersectionPolies steps = do
-  steps <- S.toList_ steps >>= return . V.fromList
+  steps <- S.toList_ steps
   frame <- fullFrame
-  let (PolySearch {..}) =
-        V.foldr
-          (search $ V.map position steps)
-          (PolySearch [] (Q.new frame) 0)
+  let polies =
+        catMaybes $
+        found $
+        foldr
+          (search $ V.fromList $ map position steps)
+          (PolySearch [] (Q.new frame) 0 Nothing)
           steps
-  return $ catMaybes found
+  return polies
 
 data PolySearch =
   PolySearch
     { found :: [Maybe Line]
     , tree :: Q.QuadTree Int
     , idx :: Int
+    , lastIntersection :: Maybe Int
     }
 
 search :: V.Vector (V2 Double) -> Step -> PolySearch -> PolySearch
@@ -125,13 +128,19 @@ search vs step@(Step {..}) (PolySearch {..}) =
       (is, tree') = Q.insert tree leaf
       intersection = do
         (Q.Leaf np j) <- Q.nearest tree leaf
-        begin <-
-          if distance np position > 0.2
-            then Nothing
-            else Just j
+        if distance np position >= 0.05
+          then Nothing
+          else Just j
+      line = do
+        begin <- lastIntersection
         let slice = V.slice begin (idx - begin) vs
         mkLine slice
-   in PolySearch {found = intersection : found, tree = tree', idx = idx + 1}
+   in PolySearch
+        { found = line : found
+        , tree = tree'
+        , idx = idx + 1
+        , lastIntersection = intersection
+        }
 
 data Dot =
   Dot
@@ -164,26 +173,71 @@ defaultWiggler = do
   smoothness <- sampleRVar $ normal 200 40
   return $ mkNoiseWiggler z strength smoothness
 
+data Stripe =
+  Stripe
+    { palette :: THColours
+    , line :: Line
+    }
+
+instance Element Stripe where
+  realize (Stripe palette line) = do
+    col <- assignTHColour palette $ V.head $ toVertices line
+    return $ do
+      setLineWidth 0.2
+      setColour (col, 0.1 :: Double)
+      draw line
+      stroke
+
+stripes :: THColours -> Stream Stripe
+stripes palette =
+  S.mapM pointToStripe $ unfoldGenerates $ grid def {rows = 100, cols = 100}
+  where
+    pointToStripe p = do
+      theta <- sampleRVar $ normal (pi / 4) (pi / 12)
+      length <- sampleRVar $ normal 5 1
+      let end = circumPoint p theta length
+      return $ Stripe palette $ fromJust $ mkLine $ V.fromList [p, end]
+
+data Rorshock =
+  Rorshock
+    { splotch :: Splotch
+    }
+
+instance Element Rorshock where
+  realize (Rorshock splotch) = do
+    thickness <- sampleRVar (normal 0.2 0.1) >>= return . abs
+    mode :: Double <- sampleRVar $ uniform 0 1
+    let finisher =
+          if mode < 0.2
+            then fill
+            else stroke
+    return $ do
+      setLineWidth thickness
+      draw splotch
+      finisher
+
 sketch :: State -> Stream (Render ())
 sketch state@(State {..}) =
   streamGenerates [background palette] >> S.concat (S.take 1 $ S.repeatM shapes)
-  where
-    stepCount = 2000
     {-trace = do
       ps <- S.toList_ $ S.take stepCount $ S.map position steps
       return $ (\l -> draw l >> stroke) $ fromJust $ mkLine $ V.fromList ps-}
+  where
     shapes :: Generate [Render ()] = do
-      polies :: [Line] <- intersectionPolies $ S.take stepCount steps
+      let inFrame (Step {..}) = do
+            frame <- fullFrame
+            return $ withinRect frame position
+      polies :: [Line] <- intersectionPolies $ S.takeWhileM inFrame steps
       let toSplotches line = do
             col <- assignTHColour thColours $ V.head $ toVertices line
             let splotch = mkSplotch line col
             bg <-
-              flatWaterColour 1 2 (const $ defaultWiggler) $
+              flatWaterColour 0.04 100 (const $ defaultWiggler) $
               subdivideN 2 splotch
-            return $ splotch : (take 2 bg)
+            return $ bg
       splotches <- concatMapM toSplotches polies
-      return $ map (\s -> draw s >> fill >> stroke) splotches
-    steps = walk (gaussianWalker 0.5) pathOrigin
+      mapM (realize . Rorshock) splotches
+    steps = walk (gaussianWalker 0.3) pathOrigin
 
 main :: IO ()
 main = do

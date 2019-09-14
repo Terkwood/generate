@@ -68,7 +68,6 @@ instance Drawable Splotch where
   draw (Splotch poly c) = do
     setColour c
     draw poly
-    closePath
 
 mkSplotch :: Line -> RGB Double -> Splotch
 mkSplotch poly colour = Splotch poly (colour, 1.0)
