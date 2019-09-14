@@ -147,44 +147,42 @@ nearest tree p = nearestBy DefaultHeursitic tree p
 -- Returns the nearest point in the QuadTree to the given leaf.
 -- Uses the provided distance function.
 nearestBy :: Heuristic h v => h -> QuadTree v -> Leaf v -> Maybe (Leaf v)
-nearestBy heuristic tree p =
-  _nearest heuristic (_treeLeaf tree) p $ V.fromList [tree]
+nearestBy heuristic tree p = _nearest heuristic (_treeLeaf tree) p [tree]
 
 _nearest ::
      Heuristic h v
   => h
   -> (Maybe (Leaf v))
   -> Leaf v
-  -> V.Vector (QuadTree v)
+  -> [QuadTree v]
   -> Maybe (Leaf v)
 _nearest h best searchLeaf trees =
   let treesWithChildren =
-        V.mapMaybe
+        mapMaybe
           (\tree ->
              case tree of
                QuadNode quad -> Just quad
                _ -> Nothing)
           trees
-      treesWithLeaves = V.filter (isJust . _treeLeaf) trees
-      candidateLeaves = V.mapMaybe (_treeLeaf) treesWithLeaves
+      treesWithLeaves = filter (isJust . _treeLeaf) trees
+      candidateLeaves = mapMaybe (_treeLeaf) treesWithLeaves
       candidateLeaves' =
         case best of
-          Just best -> V.cons best $ candidateLeaves
+          Just best -> best : candidateLeaves
           Nothing -> candidateLeaves
       best' =
-        if V.null candidateLeaves'
+        if null candidateLeaves'
           then Nothing
           else Just $
-               V.minimumBy
-                 (comparing $ (distanceBetween h) searchLeaf)
-                 candidateLeaves'
+               V.minimumBy (comparing $ (distanceBetween h) searchLeaf) $
+               V.fromList candidateLeaves'
    in case best' of
         Nothing -> Nothing
         Just best' ->
           let eligible_ =
-                V.filter ((eligible h) best' searchLeaf) treesWithChildren
-              next = V.concatMap (_nextLevel) eligible_
-           in if V.null next
+                filter ((eligible h) best' searchLeaf) treesWithChildren
+              next = concatMap (_nextLevel) eligible_
+           in if null next
                 then Just best'
                 else _nearest h (Just best') searchLeaf next
 
@@ -197,9 +195,8 @@ empty :: QuadTree v -> Bool
 empty (QuadNode (Quad _ _ rep _)) = isNothing rep
 empty (LeafNode _ _ _) = False
 
-_nextLevel :: Quad v -> V.Vector (QuadTree v)
-_nextLevel (Quad _ _ _ (c1, c2, c3, c4)) =
-  V.fromList $ catMaybes [c1, c2, c3, c4]
+_nextLevel :: Quad v -> [QuadTree v]
+_nextLevel (Quad _ _ _ (c1, c2, c3, c4)) = catMaybes [c1, c2, c3, c4]
 
 _distanceToNode :: V2 Double -> QuadTree v -> Maybe (Double)
 _distanceToNode p (QuadNode (Quad _ reg rep _)) =

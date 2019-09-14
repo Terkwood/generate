@@ -93,5 +93,8 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -O3
+    - -funfolding-use-threshold=16
+    - -optc-O3
+    - -optc-ffast-math
     dependencies:
     - generate

@@ -32,7 +32,7 @@ mkPalette :: Generate SimplePalette
 mkPalette =
   randElem $
   V.fromList
-    [ monoPastelRed
+    [ mondrian
     , mkSimplePalette "EFC271" ["3E8A79", "E9A931", "F03E4D", "CC3433"]
     ]
 
@@ -126,7 +126,7 @@ search vs step@(Step {..}) (PolySearch {..}) =
       intersection = do
         (Q.Leaf np j) <- Q.nearest tree leaf
         begin <-
-          if distance np position > 0.4
+          if distance np position > 0.2
             then Nothing
             else Just j
         let slice = V.slice begin (idx - begin) vs
@@ -166,8 +166,7 @@ defaultWiggler = do
 
 sketch :: State -> Stream (Render ())
 sketch state@(State {..}) =
-  streamGenerates [background palette] >>
-  S.concat (S.take 10 $ S.repeatM shapes)
+  streamGenerates [background palette] >> S.concat (S.take 1 $ S.repeatM shapes)
   where
     stepCount = 2000
     {-trace = do
@@ -179,11 +178,11 @@ sketch state@(State {..}) =
             col <- assignTHColour thColours $ V.head $ toVertices line
             let splotch = mkSplotch line col
             bg <-
-              flatWaterColour 0.3 1 (const $ defaultWiggler) $
+              flatWaterColour 1 2 (const $ defaultWiggler) $
               subdivideN 2 splotch
-            return $ [splotch, head bg]
+            return $ splotch : (take 2 bg)
       splotches <- concatMapM toSplotches polies
-      return $ map (\s -> draw s >> fill) splotches
+      return $ map (\s -> draw s >> fill >> stroke) splotches
     steps = walk (gaussianWalker 0.5) pathOrigin
 
 main :: IO ()
