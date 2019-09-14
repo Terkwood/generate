@@ -32,8 +32,12 @@ mkPalette :: Generate SimplePalette
 mkPalette =
   randElem $
   V.fromList
-    [ mondrian
+    [ mkSimplePalette
+        "030303"
+        ["68A793", "ECBF1F", "E2B01A", "B95928", "8F253F"]
+    , mkSimplePalette "211721" ["4A294D", "F3237F", "DC5956", "F383D0"]
     , mkSimplePalette "EFC271" ["3E8A79", "E9A931", "F03E4D", "CC3433"]
+    , mkSimplePalette "A35A49" ["35322B", "FDC8D0", "E69A9A", "FCFEFD"]
     ]
 
 background :: SimplePalette -> Generate (Render ())
@@ -55,6 +59,7 @@ data State =
     { palette :: SimplePalette
     , thColours :: THColours
     , pathOrigin :: V2 Double
+    , wiggler :: Wiggler
     }
 
 start :: Generate State
@@ -62,8 +67,16 @@ start = do
   palette <- mkPalette
   thColours <- mkTHColours palette
   pathOrigin <- centerPoint
+  strength <- sampleRVar $ uniform 0 20
+  scale <- sampleRVar $ uniform 100 500
+  let wiggler = mkNoiseWiggler 100 strength scale
   return $
-    State {palette = palette, thColours = thColours, pathOrigin = pathOrigin}
+    State
+      { palette = palette
+      , thColours = thColours
+      , pathOrigin = pathOrigin
+      , wiggler = wiggler
+      }
 
 data Step =
   Step
@@ -132,7 +145,7 @@ search vs step@(Step {..}) (PolySearch {..}) =
           then Nothing
           else Just j
       line = do
-        begin <- lastIntersection
+        begin <- intersection
         let slice = V.slice begin (idx - begin) vs
         mkLine slice
    in PolySearch
@@ -176,27 +189,29 @@ defaultWiggler = do
 data Stripe =
   Stripe
     { palette :: THColours
+    , opacity :: Double
     , line :: Line
     }
 
 instance Element Stripe where
-  realize (Stripe palette line) = do
+  realize (Stripe palette opacity line) = do
     col <- assignTHColour palette $ V.head $ toVertices line
     return $ do
       setLineWidth 0.2
-      setColour (col, 0.1 :: Double)
+      setColour (col, opacity)
       draw line
       stroke
 
-stripes :: THColours -> Stream Stripe
-stripes palette =
-  S.mapM pointToStripe $ unfoldGenerates $ grid def {rows = 100, cols = 100}
+stripes :: State -> Stream Stripe
+stripes (State {..}) =
+  S.mapM fixLine $ unfoldGenerates $ maze def {rows = 100, cols = 100}
   where
-    pointToStripe p = do
-      theta <- sampleRVar $ normal (pi / 4) (pi / 12)
-      length <- sampleRVar $ normal 5 1
-      let end = circumPoint p theta length
-      return $ Stripe palette $ fromJust $ mkLine $ V.fromList [p, end]
+    fixLine line = do
+      let vs = toVertices line
+      vs' <- V.mapM (wiggle wiggler) vs
+      let V2 x y = V.head vs
+      o <- noiseSample $ V3 (x / 400) (y / 400) 10
+      return $ Stripe thColours (0.4 * abs o) $ fromJust $ mkLine vs'
 
 data Rorshock =
   Rorshock
@@ -211,14 +226,15 @@ instance Element Rorshock where
           if mode < 0.2
             then fill
             else stroke
-    return $ do
-      setLineWidth thickness
-      draw splotch
-      finisher
+    let base = do
+          setLineWidth thickness
+          draw splotch
+    return $ base >> finisher
 
 sketch :: State -> Stream (Render ())
 sketch state@(State {..}) =
-  streamGenerates [background palette] >> S.concat (S.take 1 $ S.repeatM shapes)
+  streamGenerates [background palette] >> S.mapM realize (stripes state) >>
+  S.concat (S.take 30 $ S.repeatM shapes)
     {-trace = do
       ps <- S.toList_ $ S.take stepCount $ S.map position steps
       return $ (\l -> draw l >> stroke) $ fromJust $ mkLine $ V.fromList ps-}
@@ -227,12 +243,13 @@ sketch state@(State {..}) =
       let inFrame (Step {..}) = do
             frame <- fullFrame
             return $ withinRect frame position
-      polies :: [Line] <- intersectionPolies $ S.takeWhileM inFrame steps
+      polies :: [Line] <-
+        intersectionPolies $ S.take 4000 $ S.takeWhileM inFrame steps
       let toSplotches line = do
             col <- assignTHColour thColours $ V.head $ toVertices line
             let splotch = mkSplotch line col
             bg <-
-              flatWaterColour 0.04 100 (const $ defaultWiggler) $
+              flatWaterColour 0.5 10 (const $ defaultWiggler) $
               subdivideN 2 splotch
             return $ bg
       splotches <- concatMapM toSplotches polies
