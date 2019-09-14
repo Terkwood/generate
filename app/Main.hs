@@ -4,6 +4,8 @@ import qualified Data.Vector as V
 import Linear hiding (rotate)
 import System.IO.Unsafe
 
+import Control.Exception
+import Debug.Trace as D
 import Generate
 import qualified Generate.Algo.CirclePack as P
 import qualified Generate.Algo.QuadTree as Q
@@ -19,6 +21,7 @@ import Generate.Patterns.Water
 import Petal
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
+import System.IO.Unsafe
 
 ramp :: Int -> [Double]
 ramp total = map valueOf [0 .. total]
@@ -29,10 +32,7 @@ mkPalette :: Generate SimplePalette
 mkPalette =
   randElem $
   V.fromList
-    [ jhoto
-    , metroid
-    , gurken
-    , mote
+    [ monoPastelRed
     , mkSimplePalette "EFC271" ["3E8A79", "E9A931", "F03E4D", "CC3433"]
     ]
 
@@ -53,14 +53,17 @@ bgStream = do
 data State =
   State
     { palette :: SimplePalette
+    , thColours :: THColours
     , pathOrigin :: V2 Double
     }
 
 start :: Generate State
 start = do
   palette <- mkPalette
+  thColours <- mkTHColours palette
   pathOrigin <- centerPoint
-  return $ State {palette = palette, pathOrigin = pathOrigin}
+  return $
+    State {palette = palette, thColours = thColours, pathOrigin = pathOrigin}
 
 data Step =
   Step
@@ -102,34 +105,33 @@ intersectionPolies :: Stream Step -> Generate [Line]
 intersectionPolies steps = do
   steps <- S.toList_ steps >>= return . V.fromList
   frame <- fullFrame
-  let (PolySearch results) = V.foldr (search steps) (PolySearch []) steps
-  return $
-    mapMaybe
-      (\(start, end) -> mkLine $ V.map position $ V.slice start end steps)
-      results
-
-data Shape =
-  Shape
-    { line :: Line
-    }
-
-instance Drawable Shape where
-  draw (Shape line) = do
-    setSourceRGB 0 0 0
-    draw line
-    fill
+  let (PolySearch {..}) =
+        V.foldr
+          (search $ V.map position steps)
+          (PolySearch [] (Q.new frame) 0)
+          steps
+  return $ catMaybes found
 
 data PolySearch =
   PolySearch
-    { found :: [(Int, Int)]
+    { found :: [Maybe Line]
+    , tree :: Q.QuadTree Int
+    , idx :: Int
     }
 
-search :: V.Vector Step -> Step -> PolySearch -> PolySearch
-search vs s@(Step {..}) (PolySearch {..}) =
-  PolySearch $
-  case V.find ((< 1) . (distance position) . (\(Step {..}) -> position)) vs of
-    Just (Step i _ _ _) -> (i, stepIdx - i) : found
-    Nothing -> found
+search :: V.Vector (V2 Double) -> Step -> PolySearch -> PolySearch
+search vs step@(Step {..}) (PolySearch {..}) =
+  let leaf = Q.Leaf position idx
+      (is, tree') = Q.insert tree leaf
+      intersection = do
+        (Q.Leaf np j) <- Q.nearest tree leaf
+        begin <-
+          if distance np position > 0.4
+            then Nothing
+            else Just j
+        let slice = V.slice begin (idx - begin) vs
+        mkLine slice
+   in PolySearch {found = intersection : found, tree = tree', idx = idx + 1}
 
 data Dot =
   Dot
@@ -143,14 +145,46 @@ instance Element Dot where
       draw $ Circle c 1
       fill
 
+mkNoiseWiggler :: Double -> Double -> Double -> Wiggler
+mkNoiseWiggler z strength smoothness =
+  Wiggler $ \p@(V2 x y) -> do
+    let scale = 1 / smoothness
+    let fixSamplePoint = fmap (scale *)
+    theta <-
+      (noiseSample $ fixSamplePoint $ V3 x y z) >>= return . (\x -> x * 2 * pi)
+    r <-
+      (noiseSample $ fixSamplePoint $ V3 x y (negate z)) >>=
+      return . (* strength)
+    return $ circumPoint p theta r
+
+defaultWiggler :: Generate Wiggler
+defaultWiggler = do
+  z <- sampleRVar $ uniform 0 1000
+  strength <- sampleRVar $ normal 0 30
+  smoothness <- sampleRVar $ normal 200 40
+  return $ mkNoiseWiggler z strength smoothness
+
 sketch :: State -> Stream (Render ())
 sketch state@(State {..}) =
-  streamGenerates [background palette] >> unfoldGenerates shapes
+  streamGenerates [background palette] >>
+  S.concat (S.take 10 $ S.repeatM shapes)
   where
+    stepCount = 2000
+    {-trace = do
+      ps <- S.toList_ $ S.take stepCount $ S.map position steps
+      return $ (\l -> draw l >> stroke) $ fromJust $ mkLine $ V.fromList ps-}
     shapes :: Generate [Render ()] = do
-      polies :: [Line] <- intersectionPolies $ S.take 10000 steps
-      return $ map (draw . Shape) polies
-    steps = walk (gaussianWalker 0.1) pathOrigin
+      polies :: [Line] <- intersectionPolies $ S.take stepCount steps
+      let toSplotches line = do
+            col <- assignTHColour thColours $ V.head $ toVertices line
+            let splotch = mkSplotch line col
+            bg <-
+              flatWaterColour 0.3 1 (const $ defaultWiggler) $
+              subdivideN 2 splotch
+            return $ [splotch, head bg]
+      splotches <- concatMapM toSplotches polies
+      return $ map (\s -> draw s >> fill) splotches
+    steps = walk (gaussianWalker 0.5) pathOrigin
 
 main :: IO ()
 main = do

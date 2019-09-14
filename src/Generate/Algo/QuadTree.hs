@@ -4,11 +4,11 @@ module Generate.Algo.QuadTree
   , Leaf(..)
   , Heuristic(..)
   , new
+  , newWithNodeUpdater
   , insert
-  , insertMany
   , nearest
+  , nearestBy
   , empty
-  , defaultNodeUpdater
   ) where
 
 import Linear
@@ -21,38 +21,35 @@ import Generate.Geom.Rect
 import Test.Hspec
 
 data QuadTree v
-  = LeafNode (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v))
-             Rect
-             (Leaf v)
+  = LeafNode (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) Rect (Leaf v)
   | QuadNode (Quad v)
 
-data Leaf v = Leaf
-  { leafPosition :: V2 Double
-  , leafTag :: v
-  } deriving (Eq, Show)
+data Leaf v =
+  Leaf
+    { leafPosition :: V2 Double
+    , leafTag :: v
+    }
+  deriving (Eq, Show)
 
-data Heuristic v = Heuristic
-  {- Distance between leaves. -}
-  { heuristicDistance :: Leaf v -> Leaf v -> Double
+class Heuristic h v where
+  distanceBetween :: h -> Leaf v -> Leaf v -> Double
   {- Given the current best candidate leaf in search, determine whether the 
      subtree is worth searching. Returning Nothing will fall back on region
      heuristic. 
   
-     Best -> SearchLeaf -> Candidate Quad -> Eligible?
-  
-  -}
-  , heuristicFilter :: Leaf v -> Leaf v -> Quad v -> Bool
-  }
+     Best -> SearchLeaf -> Candidate Quad -> Eligible? -}
+  eligible :: h -> Leaf v -> Leaf v -> Quad v -> Bool
 
-data Quad v = Quad
-  { quadRepUpdate :: Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)
-  , quadRegion :: Rect
-  , quadRepresentative :: Maybe (Leaf v)
-  , quadChildren :: ( Maybe (QuadTree v)
-                    , Maybe (QuadTree v)
-                    , Maybe (QuadTree v)
-                    , Maybe (QuadTree v))
-  }
+data Quad v =
+  Quad
+    { quadRepUpdate :: Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)
+    , quadRegion :: Rect
+    , quadRepresentative :: Maybe (Leaf v)
+    , quadChildren :: ( Maybe (QuadTree v)
+                      , Maybe (QuadTree v)
+                      , Maybe (QuadTree v)
+                      , Maybe (QuadTree v))
+    }
 
 data Quadrant
   = Q1
@@ -66,8 +63,12 @@ defaultNodeUpdater v@(Just _) _ = v
 defaultNodeUpdater Nothing v = Just v
 
 -- Returns a new QuadTree representing the given Rect.
-new :: (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) -> Rect -> QuadTree v
-new repUpdate rect = QuadNode $ _newQuad repUpdate rect
+new :: Rect -> QuadTree v
+new r = newWithNodeUpdater defaultNodeUpdater r
+
+newWithNodeUpdater ::
+     (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) -> Rect -> QuadTree v
+newWithNodeUpdater repUpdate rect = QuadNode $ _newQuad repUpdate rect
 
 _newQuad :: (Maybe (Leaf v) -> Leaf v -> Maybe (Leaf v)) -> Rect -> Quad v
 _newQuad repUpdate rect =
@@ -75,8 +76,8 @@ _newQuad repUpdate rect =
 
 -- Returns (True, Tree with leaf inserted) if the leaf position is within
 -- the domain of the quadtree. Returns (False, Tree unchanged otherwise).
-insert :: Leaf v -> QuadTree v -> (Bool, QuadTree v)
-insert leaf@(Leaf position _) tree =
+insert :: QuadTree v -> Leaf v -> (Bool, QuadTree v)
+insert tree leaf@(Leaf position _) =
   if withinRect (_region tree) position
     then (True, ) $ _insert leaf tree
     else (False, tree)
@@ -90,7 +91,7 @@ _insert leaf@(Leaf p _) (QuadNode quad@(Quad ru reg _ _)) =
   let q = _quadrantOf reg p
    in QuadNode $ _updateChild quad leaf q
 _insert leaf@(Leaf p _) (LeafNode ru reg oldLeaf) =
-  let branch = new ru reg
+  let branch = newWithNodeUpdater ru reg
    in insertMany [oldLeaf, leaf] branch
 
 insertMany :: [Leaf v] -> QuadTree v -> QuadTree v
@@ -130,19 +131,33 @@ _quadrantOf r (V2 x y) =
                then Q2
                else Q3
 
+data DefaultHeursitic =
+  DefaultHeursitic
+
+instance Heuristic DefaultHeursitic v where
+  distanceBetween _ (Leaf p1 _) (Leaf p2 _) = distance p1 p2
+  eligible _ (Leaf best _) (Leaf s _) (Quad {..}) =
+    let distToRegion = distanceToRect quadRegion s
+        distToBest = distance best s
+     in distToRegion < distToBest
+
+nearest :: QuadTree v -> Leaf v -> Maybe (Leaf v)
+nearest tree p = nearestBy DefaultHeursitic tree p
+
 -- Returns the nearest point in the QuadTree to the given leaf.
 -- Uses the provided distance function.
-nearest :: Heuristic v -> Leaf v -> QuadTree v -> Maybe (Leaf v)
-nearest heuristic p tree =
+nearestBy :: Heuristic h v => h -> QuadTree v -> Leaf v -> Maybe (Leaf v)
+nearestBy heuristic tree p =
   _nearest heuristic (_treeLeaf tree) p $ V.fromList [tree]
 
 _nearest ::
-     Heuristic v
+     Heuristic h v
+  => h
   -> (Maybe (Leaf v))
   -> Leaf v
   -> V.Vector (QuadTree v)
   -> Maybe (Leaf v)
-_nearest h@(Heuristic distanceF eligibleF) best searchLeaf trees =
+_nearest h best searchLeaf trees =
   let treesWithChildren =
         V.mapMaybe
           (\tree ->
@@ -160,12 +175,15 @@ _nearest h@(Heuristic distanceF eligibleF) best searchLeaf trees =
         if V.null candidateLeaves'
           then Nothing
           else Just $
-               V.minimumBy (comparing $ distanceF searchLeaf) candidateLeaves'
+               V.minimumBy
+                 (comparing $ (distanceBetween h) searchLeaf)
+                 candidateLeaves'
    in case best' of
         Nothing -> Nothing
         Just best' ->
-          let eligible = V.filter (eligibleF best' searchLeaf) treesWithChildren
-              next = V.concatMap (_nextLevel) eligible
+          let eligible_ =
+                V.filter ((eligible h) best' searchLeaf) treesWithChildren
+              next = V.concatMap (_nextLevel) eligible_
            in if V.null next
                 then Just best'
                 else _nearest h (Just best') searchLeaf next

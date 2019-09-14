@@ -2,7 +2,6 @@ module Generate.Algo.CirclePack
   ( CircleSearch(..)
   , search
   , mkSearch
-  , heuristic
   ) where
 
 import Data.List
@@ -23,7 +22,11 @@ data CircleSearch =
 
 mkSearch :: Int -> Rect -> Generate Circle -> CircleSearch
 mkSearch n frame pattern =
-  CircleSearch (Q.new (representativeNodeUpdater) frame) [] n pattern
+  CircleSearch
+    (Q.newWithNodeUpdater representativeNodeUpdater frame)
+    []
+    n
+    pattern
   where
     leafRadius :: Q.Leaf Circle -> Double
     leafRadius = (\(Circle _ r) -> r) . Q.leafTag
@@ -34,24 +37,23 @@ mkSearch n frame pattern =
         Just current -> Just $ maximumBy (comparing leafRadius) [new, current]
         Nothing -> Just new
 
-heuristic :: Q.Heuristic Circle
-heuristic =
-  Q.Heuristic
-    { heuristicDistance = \(Q.Leaf _ c1) (Q.Leaf _ c2) -> negate $ overlap c1 c2
-    , heuristicFilter =
-        \(Q.Leaf _ best) (Q.Leaf p search@(Circle _ sr)) (Q.Quad _ reg rep _) ->
-          case rep of
-            Just (Q.Leaf _ (Circle _ cr)) ->
-              let distanceToRegion = distanceToRect reg p
-                  distanceToClosestPossible = distanceToRegion - cr - sr
-               in distanceToClosestPossible <
-                  ((negate $ overlap best search) :: Double)
-            Nothing -> False
-    }
+data CircleSearchHeuristic =
+  CircleSearchHeuristic
+
+instance Q.Heuristic CircleSearchHeuristic Circle where
+  distanceBetween _ (Q.Leaf _ c1) (Q.Leaf _ c2) = negate $ overlap c1 c2
+  eligible _ (Q.Leaf _ best) (Q.Leaf p search@(Circle _ sr)) (Q.Quad _ reg rep _) =
+    case rep of
+      Just (Q.Leaf _ (Circle _ cr)) ->
+        let distanceToRegion = distanceToRect reg p
+            distanceToClosestPossible = distanceToRegion - cr - sr
+         in distanceToClosestPossible <
+            ((negate $ overlap best search) :: Double)
+      Nothing -> False
 
 valid :: Q.QuadTree Circle -> Circle -> Bool
 valid tree c@(Circle center _) =
-  let leaf = Q.nearest heuristic (Q.Leaf center c) tree
+  let leaf = Q.nearestBy CircleSearchHeuristic tree $ Q.Leaf center c
    in case leaf of
         Just (Q.Leaf _ nearestCircle) -> not $ overlap c nearestCircle > 0
         Nothing -> True
@@ -66,7 +68,7 @@ search s@(CircleSearch tree circles remaining pattern) = do
     then return $
          Just $
          CircleSearch
-           (snd $ Q.insert (Q.Leaf center candidate) tree)
+           (snd $ Q.insert tree $ Q.Leaf center candidate)
            (candidate : circles)
            remaining'
            pattern
