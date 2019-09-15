@@ -27,7 +27,7 @@ data RenderSpec a =
   RenderSpec
     { renderCtx :: Int -> Context
     , renderInitState :: Generate a
-    , renderRealizer :: a -> Stream (Render ())
+    , renderRealizer :: a -> Generate (Stream (Render ()))
     , renderStepper :: a -> Generate a
     , renderEndFrame :: Int
     , renderBrainstorm :: Bool
@@ -39,7 +39,7 @@ data RenderSpec a =
 mkRender ::
      World
   -> Generate a
-  -> (a -> Stream (Render ()))
+  -> (a -> Generate (Stream (Render ())))
   -> (a -> Generate a)
   -> Int
   -> Bool
@@ -76,7 +76,7 @@ getRender (RenderSpec {..}) frame = do
     if frame == 0
       then renderInitState
       else renderLastState
-  return $ renderRealizer state
+  renderRealizer state
 
 renderFrame :: RenderSpec a -> Int -> IO Surface
 renderFrame spec@(RenderSpec {renderDimensions = (w, h), ..}) frame = do

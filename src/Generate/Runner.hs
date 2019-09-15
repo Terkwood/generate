@@ -37,11 +37,14 @@ import Generate.Monad
 import Generate.Render
 import Generate.Stream
 
-runInvocation :: Stream (Render ()) -> IO ()
+runInvocation :: Generate (Stream (Render ())) -> IO ()
 runInvocation layers = runStatefulInvocation (pure ()) (const $ layers) (return)
 
 runStatefulInvocation ::
-     Generate a -> (a -> Stream (Render ())) -> (a -> Generate a) -> IO ()
+     Generate a
+  -> (a -> Generate (Stream (Render ())))
+  -> (a -> Generate a)
+  -> IO ()
 runStatefulInvocation initState realizer stepper =
   runCommand $ \opts args -> do
     seed <-

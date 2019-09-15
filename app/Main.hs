@@ -19,7 +19,6 @@ import Generate.Patterns.RecursiveSplit
 import Generate.Patterns.Sampling
 import Generate.Patterns.Water
 import Generate.Patterns.Wiggle
-import Petal
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 import System.IO.Unsafe
@@ -69,7 +68,7 @@ start = do
   thColours <- mkTHColours palette
   pathOrigin <- centerPoint
   strength <- sampleRVar $ uniform 0 20
-  scale <- sampleRVar $ uniform 100 500
+  scale <- sampleRVar $ uniform 10 100
   let wiggler = mkNoiseWiggler 100 strength scale
   return $
     State
@@ -79,8 +78,49 @@ start = do
       , wiggler = wiggler
       }
 
-sketch :: State -> Stream (Render ())
-sketch state@(State {..}) = streamGenerates [background palette]
+data Mountain =
+  Mountain
+    { palette :: SimplePalette
+    , path :: Stream (V2 Double)
+    }
+
+instance Subdivisible Mountain where
+  subdivide m@(Mountain {..}) = m {path = subdivide path}
+
+instance Elements Mountain where
+  realize (Mountain {..}) = do
+    c <- lift $ fgColour palette
+    path' <- lift $ S.head_ (realize path) >>= return . fromJust
+    S.yield $ do
+      setColour c
+      path'
+      fill
+
+instance Wiggle Mountain where
+  wiggle wiggler m@(Mountain {..}) =
+    pure $ m {path = S.mapM (wiggle wiggler) path}
+
+mkMountain :: State -> Generate Mountain
+mkMountain State {..} = do
+  World {..} <- asks world
+  mountainWidth <- sampleRVar $ uniform (width / 10) (width / 2)
+  mountainHeight <- sampleRVar $ uniform (height / 10) (height / 5)
+  offset <- sampleRVar $ uniform (width / 10) (width - width / 10)
+  V2 _ y <- centerPoint
+  let middleX = offset + (mountainWidth / 2)
+  return $
+    Mountain palette $
+    S.each
+      [ V2 offset y
+      , V2 middleX (y - mountainHeight)
+      , V2 (offset + mountainWidth) y
+      ]
+
+sketch :: State -> Generate (Stream (Render ()))
+sketch state@(State {..}) = do
+  mountain <- mkMountain state
+  mountain' <- wiggle wiggler $ subdivideN 8 mountain
+  return $ streamGenerates [background palette] >> realize mountain'
 
 main :: IO ()
 main = do

@@ -10,9 +10,11 @@ module Generate.Geom
 
 import qualified Data.Vector as V
 import Linear
+import qualified Streaming.Prelude as S
 
 import Generate.Coord
 import Generate.Monad
+import Generate.Stream
 
 class Poly p where
   toVertices :: p -> V.Vector (V2 Double)
@@ -36,6 +38,12 @@ instance Subdivisible [V2 Double] where
       else concat $
            map (\(a, b) -> [a, b]) $
            zip vs $ zipWith midpoint vs $ (tail vs) ++ [head vs]
+
+instance Subdivisible (Stream (V2 Double)) where
+  subdivide vs =
+    let shifted = S.drop 1 vs >> S.take 1 vs
+        midpoints = S.zipWith midpoint vs shifted
+     in S.concat $ S.zipWith (\p mp -> [p, mp]) vs midpoints
 
 class Center c where
   center :: c -> V2 Double
