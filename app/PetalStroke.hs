@@ -6,16 +6,17 @@ import Linear
 
 import Generate
 import Generate.Colour.SimplePalette
-import Generate.Patterns.Water
+import Generate.Patterns.Wiggle
 
-data PetalStroke = PetalStroke
-  { palette :: SimplePalette
-  , root :: V2 Double
-  , theta :: Double
-  , size :: Double
-  , resolution :: Int
-  , wiggler :: Wiggler
-  }
+data PetalStroke =
+  PetalStroke
+    { palette :: SimplePalette
+    , root :: V2 Double
+    , theta :: Double
+    , size :: Double
+    , resolution :: Int
+    , wiggler :: Wiggler
+    }
 
 instance Element PetalStroke where
   realize petal = do
@@ -34,7 +35,7 @@ instance Element PetalStroke where
 band :: PetalStroke -> Double -> Generate (RGB Double, [BezierControlPoints])
 band (PetalStroke palette root theta size resolution wiggler) t = do
   let size' = size * t
-  V2 rx ry <- wiggle (radialWiggler $ size / 5) root
+  V2 rx ry <- wiggle (mkRadialWiggler $ size / 5) root
   theta' <- sampleRVar $ uniform 0 (2 * pi)
   let orient = rotateAbout root $ theta' - pi / 2
   let left = orient $ (V2 (rx - size' / 2) (ry - size'))

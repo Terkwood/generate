@@ -8,13 +8,15 @@ import Linear
 import Generate
 import Generate.Colour.THColours
 import Generate.Patterns.Water
+import Generate.Patterns.Wiggle
 
-data Petal = Petal
-  { _petalRoot :: V2 Double
-  , _petalSize :: Double
-  , _petalCurve :: [BezierControlPoints]
-  , _petalColour :: (RGB Double, Double)
-  }
+data Petal =
+  Petal
+    { _petalRoot :: V2 Double
+    , _petalSize :: Double
+    , _petalCurve :: [BezierControlPoints]
+    , _petalColour :: (RGB Double, Double)
+    }
 
 instance Drawable Petal where
   draw (Petal _ _ curve colour) = do
@@ -39,7 +41,7 @@ mkPetal palette size root@(V2 rx ry) theta = do
   let curve = mkCompositeCurve $ mkBezierCurve2d root left right root
   let curve' = subdivideN 4 curve
   wigglePower <- sampleRVar (normal 0 (size / 20)) >>= return . abs
-  let wiggler = radialWiggler wigglePower
+  let wiggler = mkRadialWiggler wigglePower
   curve'' <- sequence $ map (wiggle wiggler) $ realizeCurve curve'
   colour <- assignTHColour palette root
   return $ Petal root size curve'' (colour, 1)

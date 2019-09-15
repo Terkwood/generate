@@ -22,13 +22,10 @@ import Math.Spline.Knots
 
 import Generate.Draw
 import Generate.Geom
-import Generate.Patterns.Water
+import Generate.Patterns.Wiggle
 
 data BezierControlPoints =
-  BezierControlPoints (V2 Double)
-                      (V2 Double)
-                      (V2 Double)
-                      (V2 Double)
+  BezierControlPoints (V2 Double) (V2 Double) (V2 Double) (V2 Double)
 
 instance Wiggle BezierControlPoints where
   wiggle (Wiggler wiggleF) (BezierControlPoints start cp1 cp2 end) = do
@@ -85,10 +82,12 @@ circleCurve scale root@(V2 x y) =
 realizeCurve :: CompositeCurve -> [BezierControlPoints]
 realizeCurve (CompositeCurve curves) = map (bezierControlPoints) curves
 
-data BezierCurve2d = BezierCurve2d
-  { _bezierCurve2dxCurve :: BezierCurve Double
-  , _bezierCurve2dyCurve :: BezierCurve Double
-  } deriving (Show)
+data BezierCurve2d =
+  BezierCurve2d
+    { _bezierCurve2dxCurve :: BezierCurve Double
+    , _bezierCurve2dyCurve :: BezierCurve Double
+    }
+  deriving (Show)
 
 mkBezierCurve2d ::
      V2 Double -> V2 Double -> V2 Double -> V2 Double -> BezierCurve2d
@@ -122,11 +121,13 @@ instance Subdivisible CompositeCurve where
         let (left, right) = splitCurve next
          in go (finished ++ [left, right]) rest
 
-data Spline2d = Spline2d
-  { xSpline :: BSpline V.Vector Double
-  , ySpline :: BSpline V.Vector Double
-  , controlCount :: Int
-  } deriving (Show)
+data Spline2d =
+  Spline2d
+    { xSpline :: BSpline V.Vector Double
+    , ySpline :: BSpline V.Vector Double
+    , controlCount :: Int
+    }
+  deriving (Show)
 
 extend :: Int -> V.Vector a -> V.Vector a
 extend n vs =

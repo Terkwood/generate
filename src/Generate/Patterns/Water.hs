@@ -1,7 +1,5 @@
 module Generate.Patterns.Water
-  ( Wiggler(..)
-  , Wiggle(..)
-  , Translucent(..)
+  ( Translucent(..)
   , WaterColourCfg(..)
   , Splotch
   , mkSplotch
@@ -9,7 +7,6 @@ module Generate.Patterns.Water
   , warpN
   , flatWaterColour
   , waterColour
-  , radialWiggler
   ) where
 
 import "monad-extras" Control.Monad.Extra
@@ -29,20 +26,7 @@ import Generate.Geom
 import Generate.Geom.Circle
 import Generate.Geom.Line
 import Generate.Monad
-
-data Wiggler =
-  Wiggler (V2 Double -> Generate (V2 Double))
-
-class Wiggle w where
-  wiggle :: Wiggler -> w -> Generate w
-
-instance Wiggle (V2 Double) where
-  wiggle (Wiggler f) p = f p
-
-instance Wiggle Line where
-  wiggle w line =
-    V.sequence (V.map (wiggle w) $ toVertices line) >>= \vs ->
-      return $ fromJust $ fromVertices vs
+import Generate.Patterns.Wiggle
 
 class Translucent t where
   setOpacity :: Double -> t -> t
@@ -134,10 +118,3 @@ waterColour wiggler (WaterColourCfg layerCount opacity depthOfBranch depthPerBra
   layers <-
     sequence $ map (const $ warpN wiggler depthPerBranch base) [1 .. layerCount]
   return $ map (setOpacity opacity) layers
-
-radialWiggler :: Double -> Wiggler
-radialWiggler power =
-  Wiggler $ \p -> do
-    theta <- sampleRVar $ uniform 0 (2 * pi)
-    r <- sampleRVar $ normal 0 power
-    return $ circumPoint p theta r
