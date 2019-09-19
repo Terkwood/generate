@@ -1,6 +1,6 @@
 module Generate.Draw
   ( Drawable(..)
-  , Elements(..)
+  , Element(..)
   , drawAll
   , realizeAll
   ) where
@@ -23,16 +23,16 @@ instance Drawable [V2 Double] where
     moveTo x y
     foldr (>>) (pure ()) $ map (\(V2 x y) -> lineTo x y) $ tail points
 
-class Elements e where
-  realize :: e -> Stream (Render ())
+class Element e where
+  realize :: e -> Generate (Render ())
 
-instance Elements (Stream (V2 Double)) where
+instance Element (Stream (V2 Double)) where
   realize ps = do
-    ps' <- lift $ S.toList_ ps
-    S.yield $ draw ps'
+    ps' <- S.toList_ ps
+    return $ draw ps'
 
 drawAll :: Drawable d => [d] -> Render ()
 drawAll ds = foldr (>>) (pure ()) $ map draw ds
 
-realizeAll :: Elements e => [e] -> Stream (Render ())
-realizeAll es = foldr (>>) (S.each []) $ map realize es
+realizeAll :: Element e => [e] -> Stream (Render ())
+realizeAll es = S.sequence $ S.each $ map realize es

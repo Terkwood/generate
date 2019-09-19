@@ -235,9 +235,6 @@ sketch :: State -> Stream (Render ())
 sketch state@(State {..}) =
   streamGenerates [background palette] >> S.mapM realize (stripes state) >>
   S.concat (S.take 30 $ S.repeatM shapes)
-    {-trace = do
-      ps <- S.toList_ $ S.take stepCount $ S.map position steps
-      return $ (\l -> draw l >> stroke) $ fromJust $ mkLine $ V.fromList ps-}
   where
     shapes :: Generate [Render ()] = do
       let inFrame (Step {..}) = do

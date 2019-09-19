@@ -29,8 +29,8 @@ data THColours =
 mkTHColours :: SimplePalette -> Generate THColours
 mkTHColours (SimplePalette _ fgPalette) = do
   frame <- fullFrame
-  huePoints <- V.sequence $ V.generate 30 $ const $ spatialSample frame
-  valuePoints <- V.sequence $ V.generate 30 $ const $ spatialSample frame
+  huePoints <- V.sequence $ V.generate 40 $ const $ spatialSample frame
+  valuePoints <- V.sequence $ V.generate 40 $ const $ spatialSample frame
   huePoints' <-
     V.sequence $
     V.map (\p -> randElem fgPalette >>= \c -> return (p, hue c)) huePoints
@@ -51,7 +51,7 @@ closest n focus points = V.slice 0 n $ V.map (snd) $ V.backpermute points idx
 
 assignTHColour :: THColours -> V2 Double -> Generate (RGB Double)
 assignTHColour (THColours huePoints valuePoints palette) p = do
-  hue <- randElem $ closest 5 p huePoints
-  value <- randElem $ closest 5 p valuePoints
+  hue <- randElem $ closest 6 p huePoints
+  value <- randElem $ closest 6 p valuePoints
   sat <- randElem palette >>= return . saturation
   return $ hsv hue sat value

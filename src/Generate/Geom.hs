@@ -41,9 +41,8 @@ instance Subdivisible [V2 Double] where
 
 instance Subdivisible (Stream (V2 Double)) where
   subdivide vs =
-    let shifted = S.drop 1 vs >> S.take 1 vs
-        midpoints = S.zipWith midpoint vs shifted
-     in S.concat $ S.zipWith (\p mp -> [p, mp]) vs midpoints
+    S.take 1 vs >>
+    (S.concat $ S.zipWith (\a b -> [midpoint a b, b]) vs $ S.drop 1 vs)
 
 class Center c where
   center :: c -> V2 Double
