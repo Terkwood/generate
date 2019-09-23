@@ -2,12 +2,14 @@ module Generate.Geom.Line
   ( Line
   , Lines(..)
   , mkLine
+  , ngon
   ) where
 
 import Control.Lens
 import qualified Data.Vector as V
 import Graphics.Rendering.Cairo as Cairo
 import Linear
+import Data.Maybe
 
 import Generate.Coord
 import Generate.Draw
@@ -30,6 +32,11 @@ mkLine p =
    in if V.length ps >= 2
         then Just $ Line ps
         else Nothing
+
+ngon :: Double -> Int -> Double -> V2 Double -> Line
+ngon phase n r origin = fromJust $ mkLine $ V.generate n $ \i -> circumPoint origin (phaseOf i) r
+    where
+      phaseOf i = phase + (fromIntegral i / fromIntegral n) * 2 * pi
 
 instance Drawable Line where
   draw (Line points) = do

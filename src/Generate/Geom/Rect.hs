@@ -4,6 +4,7 @@ module Generate.Geom.Rect
   , rectCenter
   , withinRect
   , distanceToRect
+  , inFrame
   ) where
 
 import Control.Monad.Reader
@@ -88,6 +89,9 @@ fullFrame :: Generate Rect
 fullFrame = do
   World {width, height, ..} <- asks world
   return $ Rect (V2 0 0) width height
+
+inFrame :: V2 Double -> Generate Bool
+inFrame p = fullFrame >>= \r -> return $ withinRect r p
 
 withinRect :: Rect -> V2 Double -> Bool
 withinRect (Rect (V2 x y) w h) (V2 px py) =

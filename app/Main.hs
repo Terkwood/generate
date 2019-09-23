@@ -18,7 +18,11 @@ import Generate.Patterns.Maze
 import Generate.Patterns.RecursiveSplit
 import Generate.Patterns.Sampling
 import Generate.Patterns.Water
+import Generate.Patterns.Walker
 import Generate.Patterns.Wiggle
+import Generate.Patterns.Splatter
+import Generate.Patterns.Tangles
+import Generate.Transforms.Warp
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 import System.IO.Unsafe
@@ -33,6 +37,7 @@ mkPalette =
   randElem $
   V.fromList
     [ mkSimplePalette
+
         "030303"
         ["68A793", "ECBF1F", "E2B01A", "B95928", "8F253F"]
     , mkSimplePalette "211721" ["4A294D", "F3237F", "DC5956", "F383D0"]
@@ -161,89 +166,12 @@ waveBands State {..} = do
   let waveBands' = reverse $ map (applyWave wiggler) waveBands
   return $ realizeAll waveBands'
 
-data Step =
-  Step
-    { stepIdx :: Int
-    , theta :: Double
-    , position :: V2 Double
-    , turnTheta :: Double
-    }
-
-data Walker =
-  Walker
-    { agility :: Generate Double
-    , step :: Double
-    }
-
-gaussianWalker :: Double -> Walker
-gaussianWalker strength =
-  Walker {agility = sampleRVar $ normal 0 strength, step = 0.4}
-
-walk :: Walker -> V2 Double -> Stream Step
-walk walker origin =
-  let first = do
-        theta <- sampleRVar $ uniform 0 (2 * pi)
-        return $ Step 0 theta origin pi
-   in S.iterateM (_step walker) first
-
-_step :: Walker -> Step -> Generate Step
-_step (Walker {..}) (Step {..}) = do
-  turn <- agility
-  let (turnTheta', turn') =
-        if theta `mod'` (2 * pi) > turnTheta
-          then ((turnTheta + pi) `mod'` (2 * pi), turn)
-          else (turnTheta, turn' * 2)
-  let theta' = theta + turn
-  let next = circumPoint position theta step
-  return $ Step (stepIdx + 1) theta' next turnTheta'
-
-intersectionPolies :: Stream Step -> Generate [Line]
-intersectionPolies steps = do
-  steps <- S.toList_ steps
-  frame <- fullFrame
-  let polies =
-        catMaybes $
-        found $
-        foldr
-          (search $ V.fromList $ map position steps)
-          (PolySearch [] (Q.new frame) 0 Nothing)
-          steps
-  return polies
-
 defaultWiggler :: Generate Wiggler
 defaultWiggler = do
   z <- sampleRVar $ uniform 0 1000
   strength <- sampleRVar $ normal 0 30
   smoothness <- sampleRVar $ normal 200 40
   return $ mkNoiseWiggler z strength smoothness
-
-data PolySearch =
-  PolySearch
-    { found :: [Maybe Line]
-    , tree :: Q.QuadTree Int
-    , idx :: Int
-    , lastIntersection :: Maybe Int
-    }
-
-search :: V.Vector (V2 Double) -> Step -> PolySearch -> PolySearch
-search vs step@(Step {..}) (PolySearch {..}) =
-  let leaf = Q.Leaf position idx
-      (is, tree') = Q.insert tree leaf
-      intersection = do
-        (Q.Leaf np j) <- Q.nearest tree leaf
-        if distance np position >= 0.05
-          then Nothing
-          else Just j
-      line = do
-        begin <- intersection
-        let slice = V.slice begin (idx - begin) vs
-        mkLine slice
-   in PolySearch
-        { found = line : found
-        , tree = tree'
-        , idx = idx + 1
-        , lastIntersection = intersection
-        }
 
 data Dot =
   Dot
@@ -256,63 +184,73 @@ instance Element Dot where
     col <- fgColour palette
     return $ do
       setColour col
-      draw $ Circle center 1
+      draw $ Circle center 0.6
       fill
 
 dots :: SimplePalette -> Generate (Render ())
 dots palette = do
-  scale <- sampleRVar $ uniform 100 1000
+  scale <- sampleRVar $ uniform 10 60
   ps <- grid def {cols = scale, rows = scale}
   let dots = map (Dot palette) ps
   dots' <- mapM realize dots
   return $ foldr1 (>>) dots'
 
-data Rorshock =
+data Rorshock d =
   Rorshock
     { state :: State
-    , splotch :: Splotch
+    , drawable :: d
     }
 
-instance Element Rorshock where
-  realize (Rorshock state@(State {..}) splotch) = do
+instance (Drawable d) => Element (Rorshock d) where
+  realize (Rorshock state@(State {..}) drawable) = do
     thickness <- sampleRVar (normal 0.2 0.1) >>= return . abs
     rawBands <- waveBands state
+    colour <- D.trace "hello?" $ fgColour palette
     bands <- S.fold_ (>>) (pure ()) id rawBands
     mode :: Double <- sampleRVar $ uniform 0 1
     let base = do
           setLineWidth thickness
-          draw splotch
+          setColour colour
+          draw drawable
+          closePath
     dotMatte <- dots palette
-    return $
-      if mode < 0.3
-        then if mode < 1.5
-               then alphaMatte (base >> fill) bands
-               else alphaMatte dotMatte (base >> fill)
+    return $ if mode < 0.4
+        then if mode < 0.2
+            then alphaMatte (base >> fill) bands
+            else alphaMatte (base >> fill) dotMatte
         else base >> stroke
 
+repeatStream :: Stream a -> Stream a
+repeatStream s = do
+  first <- lift $ S.next s
+  case first of
+    Left _ -> repeatStream s
+    Right (first, _) -> let step as = do
+                                  next <- S.next as 
+                                  case next of
+                                    Left _ -> S.next $ repeatStream s
+                                    Right (next, rest) -> return $ Right (next, rest)
+                            in S.unfoldr step s
+        
+
+walkDebug :: State -> Generate (Stream (Render ()))
+walkDebug state@(State {..}) = do
+  origin <- centerPoint
+  let cfg = symSplatter $ normal 0 20
+  let points = mkSplatter cfg origin
+  let splotchFromPoint p = do
+        size <- sampleRVar $ normal 40 20 >>= return . abs
+        let base = ngon 0 8 size p
+        iterateM transform base >>= return . (!!3)
+  let circles = S.mapM splotchFromPoint points
+  return $ S.mapM realize $ S.map (Rorshock state) circles
+    where
+      transform :: Line -> Generate Line
+      transform = warp def . subdivide
 sketch :: State -> Generate (Stream (Render ()))
 sketch state@(State {..}) = do
-  count <- sampleRVar $ uniform 1 100
-  return $
-    streamGenerates [background palette] >>
-    S.concat (S.take count $ S.repeatM shapes)
-  where
-    shapes :: Generate [Render ()] = do
-      let inFrame (Step {..}) = do
-            frame <- fullFrame
-            return $ withinRect frame position
-      polies :: [Line] <-
-        intersectionPolies $ S.take 4000 $ S.takeWhileM inFrame steps
-      let toSplotches line = do
-            col <- assignTHColour thColours $ V.head $ toVertices line
-            let splotch = mkSplotch line col
-            bg <-
-              flatWaterColour 1 2 (const $ defaultWiggler) $
-              subdivideN 2 splotch
-            return $ bg
-      splotches <- concatMapM toSplotches polies
-      mapM (realize . Rorshock state) splotches
-    steps = walk (gaussianWalker 0.3) pathOrigin
+  debug <- walkDebug state
+  return $ streamGenerates [background palette] >> S.take 20 debug
 
 main :: IO ()
 main = do

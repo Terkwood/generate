@@ -47,7 +47,6 @@ dependencies:
 - monad-extras
 - random
 - random-shuffle
-- llvm-hs
 - hspec
 - utility-ht
 - vector-algorithms
