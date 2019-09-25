@@ -5,7 +5,15 @@ module Generate.Algo.Vec
   ) where
 
 import Data.Ord
-import Data.Vector (Vector, (!), backpermute, convert, unsafeIndex, slice, length)
+import Data.Vector
+  ( Vector
+  , (!)
+  , backpermute
+  , convert
+  , length
+  , slice
+  , unsafeIndex
+  )
 import qualified Data.Vector.Algorithms.Intro as I
 import Data.Vector.Unboxed (generate, modify)
 import Prelude hiding ((!), length)
@@ -21,5 +29,6 @@ sortWith :: Ord o => (e -> o) -> Vector e -> Vector e
 sortWith f vs = sortBy (\e1 e2 -> compare (f e1) (f e2)) vs
 
 windows :: Int -> Vector e -> [Vector e]
-windows n vs = let windowCount = (length vs `div` n) * 3
-                in map (\i -> slice i n vs) [0..(windowCount - 1)]
+windows n vs =
+  let windowCount = length vs - n
+   in map (\i -> slice i n vs) [0 .. (windowCount - 1)]

@@ -10,6 +10,7 @@ import Generate
 import qualified Generate.Algo.CirclePack as P
 import qualified Generate.Algo.QuadTree as Q
 import qualified Generate.Algo.Vec as V
+import Generate.Collision.Bounds
 import Generate.Colour.SimplePalette
 import Generate.Colour.THColours
 import Generate.Geom.Frame
@@ -17,11 +18,11 @@ import Generate.Patterns.Grid
 import Generate.Patterns.Maze
 import Generate.Patterns.RecursiveSplit
 import Generate.Patterns.Sampling
-import Generate.Patterns.Water
-import Generate.Patterns.Walker
-import Generate.Patterns.Wiggle
 import Generate.Patterns.Splatter
 import Generate.Patterns.Tangles
+import Generate.Patterns.Walker
+import Generate.Patterns.Water
+import Generate.Patterns.Wiggle
 import Generate.Transforms.Warp
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
@@ -37,7 +38,6 @@ mkPalette =
   randElem $
   V.fromList
     [ mkSimplePalette
-
         "030303"
         ["68A793", "ECBF1F", "E2B01A", "B95928", "8F253F"]
     , mkSimplePalette "211721" ["4A294D", "F3237F", "DC5956", "F383D0"]
@@ -184,13 +184,21 @@ instance Element Dot where
     col <- fgColour palette
     return $ do
       setColour col
-      draw $ Circle center 0.6
+      draw $ Circle center 0.4
       fill
 
-dots :: SimplePalette -> Generate (Render ())
-dots palette = do
-  scale <- sampleRVar $ uniform 10 60
-  ps <- grid def {cols = scale, rows = scale}
+dots :: SimplePalette -> Rect -> Generate (Render ())
+dots palette (Rect topLeft width height) = do
+  scale <- sampleRVar $ uniform 15 23
+  ps <-
+    grid
+      def
+        { cols = scale
+        , rows = scale
+        , topLeft = topLeft
+        , width = Just width
+        , height = Just height
+        }
   let dots = map (Dot palette) ps
   dots' <- mapM realize dots
   return $ foldr1 (>>) dots'
@@ -201,11 +209,11 @@ data Rorshock d =
     , drawable :: d
     }
 
-instance (Drawable d) => Element (Rorshock d) where
+instance (Drawable d, BoundingRect d) => Element (Rorshock d) where
   realize (Rorshock state@(State {..}) drawable) = do
     thickness <- sampleRVar (normal 0.2 0.1) >>= return . abs
     rawBands <- waveBands state
-    colour <- D.trace "hello?" $ fgColour palette
+    colour <- fgColour palette
     bands <- S.fold_ (>>) (pure ()) id rawBands
     mode :: Double <- sampleRVar $ uniform 0 1
     let base = do
@@ -213,11 +221,15 @@ instance (Drawable d) => Element (Rorshock d) where
           setColour colour
           draw drawable
           closePath
-    dotMatte <- dots palette
-    return $ if mode < 0.4
-        then if mode < 0.2
-            then alphaMatte (base >> fill) bands
-            else alphaMatte (base >> fill) dotMatte
+    let bounds = boundingRect drawable
+    dotMatte <- dots palette bounds
+    return $
+      if mode < 0.5
+        then if mode < 0.3
+               then if mode < 0.15
+                      then alphaMatte (base >> fill) bands
+                      else alphaMatte (base >> fill) dotMatte
+               else base >> fill
         else base >> stroke
 
 repeatStream :: Stream a -> Stream a
@@ -225,13 +237,13 @@ repeatStream s = do
   first <- lift $ S.next s
   case first of
     Left _ -> repeatStream s
-    Right (first, _) -> let step as = do
-                                  next <- S.next as 
-                                  case next of
-                                    Left _ -> S.next $ repeatStream s
-                                    Right (next, rest) -> return $ Right (next, rest)
-                            in S.unfoldr step s
-        
+    Right (first, _) ->
+      let step as = do
+            next <- S.next as
+            case next of
+              Left _ -> S.next $ repeatStream s
+              Right (next, rest) -> return $ Right (next, rest)
+       in S.unfoldr step s
 
 walkDebug :: State -> Generate (Stream (Render ()))
 walkDebug state@(State {..}) = do
@@ -239,14 +251,17 @@ walkDebug state@(State {..}) = do
   let cfg = symSplatter $ normal 0 20
   let points = mkSplatter cfg origin
   let splotchFromPoint p = do
-        size <- sampleRVar $ normal 40 20 >>= return . abs
+        size <- sampleRVar $ normal 20 10 >>= return . abs
         let base = ngon 0 8 size p
-        iterateM transform base >>= return . (!!3)
+        let transforms = S.iterateM transform (pure base)
+        let depth = 4
+        (S.head_ $ S.drop (depth - 1) transforms) >>= return . fromJust
   let circles = S.mapM splotchFromPoint points
   return $ S.mapM realize $ S.map (Rorshock state) circles
-    where
-      transform :: Line -> Generate Line
-      transform = warp def . subdivide
+  where
+    transform :: Line -> Generate Line
+    transform = warp def . subdivide
+
 sketch :: State -> Generate (Stream (Render ()))
 sketch state@(State {..}) = do
   debug <- walkDebug state

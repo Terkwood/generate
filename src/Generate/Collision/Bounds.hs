@@ -3,6 +3,12 @@ module Generate.Collision.Bounds
   , BoundingCircle(..)
   ) where
 
+import Control.Lens
+import Data.Ord
+import qualified Data.Vector as V
+import Linear
+
+import Generate.Geom
 import Generate.Geom.Circle
 import Generate.Geom.Line
 import Generate.Geom.Rect
@@ -12,6 +18,15 @@ class BoundingRect br where
 
 instance BoundingRect Rect where
   boundingRect = id
+
+instance BoundingRect Line where
+  boundingRect line =
+    let vs = toVertices line
+        V2 left _ = V.minimumBy (comparing (^. _x)) vs
+        V2 right _ = V.maximumBy (comparing (^. _x)) vs
+        V2 _ top = V.minimumBy (comparing (^. _y)) vs
+        V2 _ bottom = V.maximumBy (comparing (^. _y)) vs
+     in Rect (V2 left top) (right - left) (bottom - top)
 
 class BoundingCircle bc where
   boundingCircle :: bc -> Circle
