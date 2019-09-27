@@ -5,6 +5,7 @@ module Generate.Monad
   , Random(..)
   , World(..)
   , noiseSample
+  , noiseSampleWithScale
   , runRand
   , randElem
   , randElemStable
@@ -49,6 +50,9 @@ noiseSample :: V3 Double -> Generate (Double)
 noiseSample (V3 x y z) = do
   noiseSrc <- asks noise
   return $ fromJust $ getValue noiseSrc (x, y, z)
+
+noiseSampleWithScale :: Double -> V3 Double -> Generate Double
+noiseSampleWithScale scale v = noiseSample $ fmap (/ scale) v
 
 runGenerate :: Context -> PureMT -> Generate a -> (a, PureMT)
 runGenerate ctx rng scene = (flip runReader ctx) . (flip runStateT rng) $ scene

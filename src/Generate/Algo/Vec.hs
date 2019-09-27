@@ -30,5 +30,5 @@ sortWith f vs = sortBy (\e1 e2 -> compare (f e1) (f e2)) vs
 
 windows :: Int -> Vector e -> [Vector e]
 windows n vs =
-  let windowCount = length vs - n
+  let windowCount = length vs - (n - 1)
    in map (\i -> slice i n vs) [0 .. (windowCount - 1)]

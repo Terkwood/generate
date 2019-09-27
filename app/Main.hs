@@ -16,6 +16,7 @@ import Generate.Colour.THColours
 import Generate.Geom.Frame
 import Generate.Patterns.Grid
 import Generate.Patterns.Maze
+import Generate.Patterns.Noise
 import Generate.Patterns.RecursiveSplit
 import Generate.Patterns.Sampling
 import Generate.Patterns.Splatter
@@ -249,23 +250,24 @@ walkDebug :: State -> Generate (Stream (Render ()))
 walkDebug state@(State {..}) = do
   origin <- centerPoint
   let cfg = symSplatter $ normal 0 20
-  let points = sampleStream $ mkSplatter cfg origin
+  let points = sampleStream $ RadialNoisePattern origin 0.001 300
   let splotchFromPoint p = do
-        size <- sampleRVar $ normal 20 10 >>= return . abs
+        size <- sampleRVar $ normal 20 20 >>= return . abs
         let base = ngon 0 8 size p
         let transforms = S.iterateM transform (pure base)
-        let depth = 4
+        let depth = 7
         (S.head_ $ S.drop (depth - 1) transforms) >>= return . fromJust
   let circles = S.mapM splotchFromPoint points
   return $ S.mapM realize $ S.map (Rorshock state) circles
   where
     transform :: Line -> Generate Line
-    transform = warp def . subdivide
+    transform line =
+      warp def line >>= return . subdivide >>= warp def >>= warp def
 
 sketch :: State -> Generate (Stream (Render ()))
 sketch state@(State {..}) = do
   debug <- walkDebug state
-  return $ streamGenerates [background palette] >> S.take 20 debug
+  return $ streamGenerates [background palette] >> S.take 40 debug
 
 main :: IO ()
 main = do
