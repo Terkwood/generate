@@ -249,7 +249,7 @@ walkDebug :: State -> Generate (Stream (Render ()))
 walkDebug state@(State {..}) = do
   origin <- centerPoint
   let cfg = symSplatter $ normal 0 20
-  let points = mkSplatter cfg origin
+  let points = sampleStream $ mkSplatter cfg origin
   let splotchFromPoint p = do
         size <- sampleRVar $ normal 20 10 >>= return . abs
         let base = ngon 0 8 size p
