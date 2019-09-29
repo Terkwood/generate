@@ -2,7 +2,6 @@ module Generate.Geom.Line
   ( Line
   , Lines(..)
   , mkLine
-  , ngon
   ) where
 
 import Control.Lens
@@ -18,6 +17,7 @@ import Generate.Geom.Circle
 
 data Line =
   Line (V.Vector (V2 Double))
+  deriving (Show)
 
 instance Poly Line where
   toVertices (Line v) = v
@@ -32,13 +32,6 @@ mkLine p =
    in if V.length ps >= 2
         then Just $ Line ps
         else Nothing
-
-ngon :: Double -> Int -> Double -> V2 Double -> Line
-ngon phase n r origin =
-  fromJust $
-  mkLine $ V.generate (n + 1) $ \i -> circumPoint origin (phaseOf i) r
-  where
-    phaseOf i = phase + (fromIntegral i / fromIntegral n) * 2 * pi
 
 instance Drawable Line where
   draw (Line points) = do

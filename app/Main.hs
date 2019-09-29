@@ -177,19 +177,20 @@ defaultWiggler = do
 data Dot =
   Dot
     { palette :: SimplePalette
+    , thickness :: Double
     , center :: V2 Double
     }
 
 instance Element Dot where
-  realize (Dot palette center) = do
+  realize (Dot palette thickness center) = do
     col <- fgColour palette
     return $ do
       setColour col
-      draw $ Circle center 0.4
+      draw $ Circle center thickness
       fill
 
-dots :: SimplePalette -> Rect -> Generate (Render ())
-dots palette (Rect topLeft width height) = do
+dots :: SimplePalette -> Rect -> Double -> Generate (Render ())
+dots palette (Rect topLeft width height) thickness = do
   scale <- sampleRVar $ uniform 15 23
   ps <-
     grid
@@ -200,7 +201,7 @@ dots palette (Rect topLeft width height) = do
         , width = Just width
         , height = Just height
         }
-  let dots = map (Dot palette) ps
+  let dots = map (Dot palette thickness) ps
   dots' <- mapM realize dots
   return $ foldr1 (>>) dots'
 
@@ -210,28 +211,62 @@ data Rorshock d =
     , drawable :: d
     }
 
-instance (Drawable d, BoundingRect d) => Element (Rorshock d) where
+data Outline d =
+  Outline Double d
+
+instance (Drawable d) => Element (Outline d) where
+  realize (Outline w d) = return $ setLineWidth w >> draw d >> stroke
+
+data Solid d =
+  Solid d
+
+instance (Drawable d) => Element (Solid d) where
+  realize (Solid d) = return $ draw d >> fill
+
+data Matte d =
+  Matte
+    { matte :: Generate (Render ())
+    , drawable :: d
+    }
+
+instance (Drawable d) => Element (Matte d) where
+  realize (Matte matte drawable) =
+    matte >>= return . alphaMatte (draw drawable >> fill)
+
+data Dotted =
+  Dotted SimplePalette [V2 Double]
+
+instance Element Dotted where
+  realize (Dotted palette line) = do
+    thickness <- sampleRVar $ normal 0.1 0.02 >>= return . abs
+    fill <- realize $ Outline thickness line
+    dotSize <- sampleRVar $ normal 1.0 0.4 >>= return . abs
+    dots <- mapM (realize . Dot palette dotSize) line
+    return $ foldr1 (>>) $ fill : dots
+
+instance (Points d, Drawable d, BoundingRect d) => Element (Rorshock d) where
   realize (Rorshock state@(State {..}) drawable) = do
-    thickness <- sampleRVar (normal 0.2 0.1) >>= return . abs
+    strokeThickness <- sampleRVar (normal 0.2 0.1) >>= return . abs
     rawBands <- waveBands state
     colour <- fgColour palette
-    bands <- S.fold_ (>>) (pure ()) id rawBands
-    mode :: Double <- sampleRVar $ uniform 0 1
+    let bands = S.fold_ (>>) (pure ()) id rawBands
     let base = do
-          setLineWidth thickness
           setColour colour
           draw drawable
           closePath
+    thickness <- sampleRVar $ normal 0.8 0.4 >>= return . abs
     let bounds = boundingRect drawable
-    dotMatte <- dots palette bounds
-    return $
-      if mode < 0.5
-        then if mode < 0.3
-               then if mode < 0.15
-                      then alphaMatte (base >> fill) bands
-                      else alphaMatte (base >> fill) dotMatte
-               else base >> fill
-        else base >> stroke
+    let dotMatte = dots palette bounds thickness
+    realizer <-
+      randElem $
+      V.fromList
+        [ realize . Outline strokeThickness
+        , realize . Solid
+        , realize . Matte bands
+        , realize . Matte dotMatte
+        , \_ -> realize $ Dotted palette (points drawable)
+        ]
+    realizer base
 
 repeatStream :: Stream a -> Stream a
 repeatStream s = do
@@ -252,22 +287,31 @@ walkDebug state@(State {..}) = do
   let cfg = symSplatter $ normal 0 20
   let points = sampleStream $ RadialNoisePattern origin 0.001 300
   let splotchFromPoint p = do
-        size <- sampleRVar $ normal 20 20 >>= return . abs
+        size <- sampleRVar $ normal 80 2 >>= return . abs
         let base = ngon 0 8 size p
         let transforms = S.iterateM transform (pure base)
-        let depth = 7
+        let depth = 3
         (S.head_ $ S.drop (depth - 1) transforms) >>= return . fromJust
   let circles = S.mapM splotchFromPoint points
   return $ S.mapM realize $ S.map (Rorshock state) circles
   where
-    transform :: Line -> Generate Line
-    transform line =
-      warp def line >>= return . subdivide >>= warp def >>= warp def
+    transform :: Shape -> Generate Shape
+    transform shape =
+      warp def shape >>= return . subdivide >>= warp def >>= warp def
 
 sketch :: State -> Generate (Stream (Render ()))
 sketch state@(State {..}) = do
   debug <- walkDebug state
-  return $ streamGenerates [background palette] >> S.take 40 debug
+  center <- centerPoint
+  let base = subdivideN 4 $ ngon 0 8 200 center
+  let splotch = D.trace (show base) base
+  let splotchRender = do
+        splotch' <- warp def splotch
+        dots <-
+          mapM (realize . Dot palette 0.4) $ V.toList $ toVertices splotch'
+        rorshock <- realize $ Rorshock state $ D.trace (show splotch') splotch'
+        return $ foldr1 (>>) $ rorshock : dots
+  return $ streamGenerates [background palette] >> S.take 100 debug
 
 main :: IO ()
 main = do

@@ -23,6 +23,9 @@ instance Drawable [V2 Double] where
     moveTo x y
     foldr (>>) (pure ()) $ map (\(V2 x y) -> lineTo x y) $ tail points
 
+instance Drawable (Render ()) where
+  draw = id
+
 class Element e where
   realize :: e -> Generate (Render ())
 

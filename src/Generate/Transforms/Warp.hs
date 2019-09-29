@@ -15,6 +15,7 @@ import Linear
 import qualified Generate.Algo.Vec as V
 import Generate.Geom
 import Generate.Geom.Line
+import Generate.Geom.Shape
 import Generate.Monad
 
 -- A warper should warp the midpoint.
@@ -26,7 +27,7 @@ instance Default Warper where
     Warper $ \WarpInput {..} -> do
       let V2 x y = subject
       let variance = distance leftNeighbor rightNeighbor
-      let offset = normal 0 $ sqrt variance / 5
+      let offset = normal 0 $ sqrt variance
       xd <- sampleRVar $ offset
       yd <- sampleRVar $ offset
       return $ V2 (x + xd) $ y + yd
@@ -44,10 +45,15 @@ class Warp w where
 instance Warp Line where
   warp (Warper f) line = do
     let vs = toVertices line
-    let last = V.last vs
+    let caboose = V.last vs
     let first = V.head vs
     let vc = V.length vs
-    let vs' = V.snoc (V.cons last vs) first
+    let vs' = V.snoc (V.cons caboose vs) first
     let windows = V.windows 3 vs'
     vs'' <- mapM (\vs -> f $ WarpInput (vs V.! 0) (vs V.! 1) (vs V.! 2)) windows
-    return $ fromJust $ mkLine $ V.fromList vs''
+    return $ fromJust $ mkLine $ V.fromList $ vs''
+
+instance Warp Shape where
+  warp warper shape =
+    let line = fromJust $ mkLine $ toVertices shape
+     in warp warper line >>= return . fromJust . mkShape . toVertices

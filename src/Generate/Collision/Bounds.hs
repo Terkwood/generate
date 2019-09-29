@@ -4,6 +4,7 @@ module Generate.Collision.Bounds
   ) where
 
 import Control.Lens
+import Data.Maybe
 import Data.Ord
 import qualified Data.Vector as V
 import Linear
@@ -12,6 +13,7 @@ import Generate.Geom
 import Generate.Geom.Circle
 import Generate.Geom.Line
 import Generate.Geom.Rect
+import Generate.Geom.Shape
 
 class BoundingRect br where
   boundingRect :: br -> Rect
@@ -27,6 +29,10 @@ instance BoundingRect Line where
         V2 _ top = V.minimumBy (comparing (^. _y)) vs
         V2 _ bottom = V.maximumBy (comparing (^. _y)) vs
      in Rect (V2 left top) (right - left) (bottom - top)
+
+instance BoundingRect Shape where
+  boundingRect shape =
+    boundingRect $ (fromJust $ fromVertices $ toVertices shape :: Line)
 
 class BoundingCircle bc where
   boundingCircle :: bc -> Circle
