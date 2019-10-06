@@ -4,6 +4,7 @@ module Generate.Stream
   , runStream
   , streamGenerates
   , unfoldGenerates
+  , concatStreams
   ) where
 
 import Control.Monad
@@ -47,6 +48,40 @@ _runStream state@(RunState {..}) =
         scale scaleFactor scaleFactor
         renderCmd
       return $ Right ((), state {rng = rng', stream = rest})
+
+data NestedStream b =
+  NestedStream
+    { source :: Stream (Stream b)
+    , current :: Stream b
+    }
+
+stepNested :: NestedStream b -> Generate (Maybe (b, NestedStream b))
+stepNested (NestedStream source current) = do
+  next <- S.next current
+  case next of
+    Left () -> do
+      nextStream <- S.next source
+      case nextStream of
+        Left () -> return Nothing
+        Right (nextStream, source') ->
+          stepNested $ NestedStream source' nextStream
+    Right (b, rest) -> return $ Just (b, NestedStream source rest)
+
+concatStreams :: Stream (Stream b) -> Stream b
+concatStreams ss = do
+  firstStream <- lift $ S.next ss
+  case firstStream of
+    Left () -> mempty
+    Right (firstStream, source) ->
+      S.unfoldr _concatStreams $ NestedStream source firstStream
+
+_concatStreams :: NestedStream b -> Generate (Either () (b, NestedStream b))
+_concatStreams nested = do
+  nextStep <- stepNested nested
+  return $
+    case nextStep of
+      Nothing -> Left ()
+      Just (b, rest) -> Right (b, rest)
 
 unfoldGenerates :: Generate [a] -> Stream a
 unfoldGenerates generates = S.unfoldr _unfoldGenerates generates

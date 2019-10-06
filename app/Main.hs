@@ -211,11 +211,12 @@ data Rorshock d =
     , drawable :: d
     }
 
-data Outline d =
-  Outline Double d
+data Outline c d =
+  Outline c Double d
 
-instance (Drawable d) => Element (Outline d) where
-  realize (Outline w d) = return $ setLineWidth w >> draw d >> stroke
+instance (CairoColour c, Drawable d) => Element (Outline c d) where
+  realize (Outline c w d) =
+    return $ setColour c >> setLineWidth w >> draw d >> stroke
 
 data Solid d =
   Solid d
@@ -239,7 +240,8 @@ data Dotted =
 instance Element Dotted where
   realize (Dotted palette line) = do
     thickness <- sampleRVar $ normal 0.1 0.02 >>= return . abs
-    fill <- realize $ Outline thickness line
+    col <- fgColour palette
+    fill <- realize $ Outline col thickness line
     dotSize <- sampleRVar $ normal 1.0 0.4 >>= return . abs
     dots <- mapM (realize . Dot palette dotSize) line
     return $ foldr1 (>>) $ fill : dots
@@ -260,7 +262,7 @@ instance (Points d, Drawable d, BoundingRect d) => Element (Rorshock d) where
     realizer <-
       randElem $
       V.fromList
-        [ realize . Outline strokeThickness
+        [ realize . Outline colour strokeThickness
         , realize . Solid
         , realize . Matte bands
         , realize . Matte dotMatte
@@ -281,37 +283,98 @@ repeatStream s = do
               Right (next, rest) -> return $ Right (next, rest)
        in S.unfoldr step s
 
-walkDebug :: State -> Generate (Stream (Render ()))
-walkDebug state@(State {..}) = do
-  origin <- centerPoint
-  let cfg = symSplatter $ normal 0 20
-  let points = sampleStream $ RadialNoisePattern origin 0.001 300
+walkDebug ::
+     State
+  -> V2 Double
+  -> Generate Double
+  -> Double
+  -> Generate (Stream (Render ()))
+walkDebug state@(State {..}) origin mkSize radius = do
   let splotchFromPoint p = do
-        size <- sampleRVar $ normal 80 2 >>= return . abs
+        size <- mkSize
         let base = ngon 0 8 size p
         let transforms = S.iterateM transform (pure base)
-        let depth = 3
+        let depth = 2
         (S.head_ $ S.drop (depth - 1) transforms) >>= return . fromJust
-  let circles = S.mapM splotchFromPoint points
+  let cfg = symSplatter $ normal 0 radius
+  let circles = S.mapM splotchFromPoint $ sampleStream $ mkSplatter cfg origin
   return $ S.mapM realize $ S.map (Rorshock state) circles
   where
     transform :: Shape -> Generate Shape
     transform shape =
       warp def shape >>= return . subdivide >>= warp def >>= warp def
 
+data Pillar =
+  Pillar
+    { state :: State
+    , top :: V2 Double
+    , pillarWidth :: Double
+    }
+
+instance Element Pillar where
+  realize (Pillar {state = State {..}, ..}) = do
+    col <- fgColour palette
+    World {..} <- asks world
+    let V2 x _ = top
+    let line = [top, V2 x height]
+    let line' = V.fromList $ subdivideN 5 line
+    let completions = V.map (^ 3) $ V.fromList $ ramp $ V.length line'
+    let drift = 100
+    let line'' =
+          V.map (\(c, (V2 x y)) -> V2 (x - c * drift) y) $
+          V.zip completions line'
+    return $ do
+      setColour col
+      setLineCap LineCapRound
+      setLineWidth pillarWidth
+      draw $ V.toList line''
+      stroke
+
+mkPillars :: State -> Generate (Stream Pillar)
+mkPillars state@(State {..}) = do
+  World {..} <- asks world
+  spireWidth <- sampleRVar (uniform 5 40) >>= return . (width /)
+  basePillarWidth <- sampleRVar (uniform 3 80) >>= return . (spireWidth /)
+  spacing <- sampleRVar (uniform 0.1 0.5) >>= return . (basePillarWidth /)
+  V2 centerX baseY <- centerPoint
+  baseYShift <- sampleRVar $ uniform 0 (height / 15)
+  let mkPillar x = do
+        y <- sampleRVar $ normal (baseY - baseYShift) $ height / 30
+        w <- sampleRVar $ normal basePillarWidth $ basePillarWidth / 5
+        return $ (Pillar state (V2 x y) w, x + w + spacing)
+  let nextPillar (_, x) = mkPillar x
+  let startX = centerX - (spireWidth / 2)
+  let endX = centerX + (spireWidth / 2)
+  return $
+    S.map fst $
+    S.takeWhile ((< endX) . snd) $ S.iterateM nextPillar $ mkPillar startX
+
+eruptPillar :: Pillar -> Stream (Render ())
+eruptPillar p@(Pillar {..}) = do
+  let prefix :: Stream (Render ()) = S.mapM realize $ S.each [p]
+  let size = fmap abs $ sampleRVar $ normal (pillarWidth * 20) (pillarWidth)
+  let radius = pillarWidth * 4
+  eruptions <-
+    lift $ sampleRVar $ fmap (floor . abs) $ normal (4 :: Double) (2 :: Double)
+  walk :: Stream (Render ()) <- lift $ walkDebug state top size radius
+  prefix >> S.take eruptions walk
+
+mkStars :: State -> Generate (Stream (Render ()))
+mkStars state@(State {..}) = do
+  let size = fmap abs $ sampleRVar $ normal 80 30
+  let walkFrom origin = do
+        walk <- walkDebug state origin size 20
+        fmap fromJust $ S.head_ walk
+  frame <- fullFrame
+  let points = sampleStream frame
+  return $ S.mapM walkFrom points
+
 sketch :: State -> Generate (Stream (Render ()))
 sketch state@(State {..}) = do
-  debug <- walkDebug state
-  center <- centerPoint
-  let base = subdivideN 4 $ ngon 0 8 200 center
-  let splotch = D.trace (show base) base
-  let splotchRender = do
-        splotch' <- warp def splotch
-        dots <-
-          mapM (realize . Dot palette 0.4) $ V.toList $ toVertices splotch'
-        rorshock <- realize $ Rorshock state $ D.trace (show splotch') splotch'
-        return $ foldr1 (>>) $ rorshock : dots
-  return $ streamGenerates [background palette] >> S.take 100 debug
+  pillars <- mkPillars state
+  let eruptions = concatStreams $ S.map eruptPillar pillars
+  stars <- mkStars state
+  return $ streamGenerates [background palette] >> eruptions >> S.take 30 stars
 
 main :: IO ()
 main = do

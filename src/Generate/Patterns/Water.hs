@@ -20,7 +20,7 @@ import Generate.Colour
 import Generate.Draw
 import Generate.Geom
 import Generate.Geom.Circle
-import Generate.Geom.Line
+import Generate.Geom.Shape
 import Generate.Monad
 import Generate.Transforms.Warp
 
@@ -29,28 +29,28 @@ class Translucent t where
 
 data Splotch =
   Splotch
-    { poly :: Line
+    { shape :: Shape
     , colour :: (RGB Double, Double)
     }
 
 instance Warp Splotch where
-  warp w s@(Splotch poly _) = do
-    poly' <- warp w poly
-    return $ s {poly = poly'}
+  warp w s@(Splotch shape _) = do
+    shape' <- warp w shape
+    return $ s {shape = shape'}
 
 instance Translucent Splotch where
   setOpacity o s@(Splotch _ (c, _)) = s {colour = (c, o)}
 
 instance Subdivisible Splotch where
-  subdivide s@(Splotch poly _) = s {poly = subdivide poly}
+  subdivide s@(Splotch shape _) = s {shape = subdivide shape}
 
 instance Drawable Splotch where
-  draw (Splotch poly c) = do
+  draw (Splotch shape c) = do
     setColour c
-    draw poly
+    draw shape
 
-mkSplotch :: Line -> RGB Double -> Splotch
-mkSplotch poly colour = Splotch poly (colour, 1.0)
+mkSplotch :: Shape -> RGB Double -> Splotch
+mkSplotch shape colour = Splotch shape (colour, 1.0)
 
 flatWaterColour ::
      (Translucent wc, Warp wc)

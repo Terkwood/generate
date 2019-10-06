@@ -23,6 +23,9 @@ class Poly p where
 class Points v where
   points :: v -> [V2 Double]
 
+instance Points [V2 Double] where
+  points = id
+
 instance Points (V.Vector (V2 Double)) where
   points = V.toList
 
@@ -35,9 +38,8 @@ instance Subdivisible [V2 Double] where
   subdivide vs =
     if null vs
       then []
-      else concat $
-           map (\(a, b) -> [a, b]) $
-           zip vs $ zipWith midpoint vs $ (tail vs) ++ [head vs]
+      else let first = concat $ zipWith (\a b -> [a, midpoint a b]) vs $ tail vs
+            in first ++ [last vs]
 
 instance Subdivisible (Stream (V2 Double)) where
   subdivide vs =

@@ -42,18 +42,13 @@ data WarpInput =
 class Warp w where
   warp :: Warper -> w -> Generate w
 
-instance Warp Line where
-  warp (Warper f) line = do
-    let vs = toVertices line
+instance Warp Shape where
+  warp (Warper f) shape = do
+    let vs = toVertices shape
     let caboose = V.last vs
     let first = V.head vs
     let vc = V.length vs
     let vs' = V.snoc (V.cons caboose vs) first
     let windows = V.windows 3 vs'
     vs'' <- mapM (\vs -> f $ WarpInput (vs V.! 0) (vs V.! 1) (vs V.! 2)) windows
-    return $ fromJust $ mkLine $ V.fromList $ vs''
-
-instance Warp Shape where
-  warp warper shape =
-    let line = fromJust $ mkLine $ toVertices shape
-     in warp warper line >>= return . fromJust . mkShape . toVertices
+    return $ fromJust $ mkShape $ V.fromList $ vs''
