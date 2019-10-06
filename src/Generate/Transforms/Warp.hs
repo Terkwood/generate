@@ -2,6 +2,8 @@ module Generate.Transforms.Warp
   ( Warp(..)
   , Warper(..)
   , WarpInput(..)
+  , fromWiggler
+  , unWarper
   ) where
 
 import Data.Default
@@ -13,10 +15,12 @@ import qualified Debug.Trace as D
 import Linear
 
 import qualified Generate.Algo.Vec as V
+import Generate.Coord
 import Generate.Geom
 import Generate.Geom.Line
 import Generate.Geom.Shape
 import Generate.Monad
+import Generate.Transforms.Wiggle
 
 -- A warper should warp the midpoint.
 data Warper =
@@ -42,13 +46,32 @@ data WarpInput =
 class Warp w where
   warp :: Warper -> w -> Generate w
 
+instance Warp Line where
+  warp (Warper f) line = do
+    let vs = toVertices line
+    let caboose = V.last vs
+    let first = V.head vs
+    let windows = V.windows 3 vs
+    vs' <- mapM (\vs -> f $ WarpInput (vs V.! 0) (vs V.! 1) (vs V.! 2)) windows
+    return $ fromJust $ mkLine $ V.fromList $ first : vs' ++ [caboose]
+
 instance Warp Shape where
   warp (Warper f) shape = do
     let vs = toVertices shape
     let caboose = V.last vs
     let first = V.head vs
-    let vc = V.length vs
     let vs' = V.snoc (V.cons caboose vs) first
     let windows = V.windows 3 vs'
     vs'' <- mapM (\vs -> f $ WarpInput (vs V.! 0) (vs V.! 1) (vs V.! 2)) windows
     return $ fromJust $ mkShape $ V.fromList $ vs''
+
+fromWiggler :: Wiggler -> Warper
+fromWiggler (Wiggler f) = Warper $ \(WarpInput {..}) -> f subject
+
+unWarper :: Double -> Warper
+unWarper strength =
+  Warper $ \WarpInput {..} -> do
+    let target = midpoint leftNeighbor rightNeighbor
+    let error = distance target subject
+    let correction = strength * error
+    return $ moveToward target subject correction

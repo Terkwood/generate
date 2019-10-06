@@ -190,7 +190,7 @@ data Column =
     , value :: Double
     }
 
-instance Drawable Column where
+instance Draw Column where
   draw (Column r v) = do
     setSourceRGB v v v
     draw r

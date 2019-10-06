@@ -1,4 +1,4 @@
-module Generate.Patterns.Wiggle
+module Generate.Transforms.Wiggle
   ( Wiggler(..)
   , Wiggle(..)
   , mkRadialWiggler

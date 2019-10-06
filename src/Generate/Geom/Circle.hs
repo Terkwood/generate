@@ -19,7 +19,7 @@ data Circle =
   Circle (V2 Double)
          Double
 
-instance Drawable Circle where
+instance Draw Circle where
   draw (Circle (V2 x y) r) = do
     arc x y r 0 (2 * pi)
 

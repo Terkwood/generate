@@ -22,7 +22,7 @@ data Frame = Frame
   , thickness :: Double
   }
 
-instance Drawable Frame where
+instance Draw Frame where
   draw frame@(Frame outer thickness) = do
     setSourceRGB 1 0 0
     draw outer

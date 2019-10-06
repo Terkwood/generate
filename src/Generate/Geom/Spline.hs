@@ -22,7 +22,7 @@ import Math.Spline.Knots
 
 import Generate.Draw
 import Generate.Geom
-import Generate.Patterns.Wiggle
+import Generate.Transforms.Wiggle
 
 data BezierControlPoints =
   BezierControlPoints (V2 Double) (V2 Double) (V2 Double) (V2 Double)
@@ -33,7 +33,7 @@ instance Wiggle BezierControlPoints where
     cp2' <- wiggleF cp2
     return $ BezierControlPoints start cp1' cp2' end
 
-instance Drawable BezierControlPoints where
+instance Draw BezierControlPoints where
   draw (BezierControlPoints (V2 sx sy) (V2 cp1x cp1y) (V2 cp2x cp2y) (V2 ex ey)) = do
     moveTo sx sy
     curveTo cp1x cp1y cp2x cp2y ex ey
@@ -41,11 +41,11 @@ instance Drawable BezierControlPoints where
 data BezierSegment =
   BezierSegment BezierControlPoints
 
-instance Drawable BezierSegment where
+instance Draw BezierSegment where
   draw (BezierSegment (BezierControlPoints _ (V2 cp1x cp1y) (V2 cp2x cp2y) (V2 ex ey))) = do
     curveTo cp1x cp1y cp2x cp2y ex ey
 
-instance Drawable [BezierControlPoints] where
+instance Draw [BezierControlPoints] where
   draw [] = pure ()
   draw (head:rest) = do
     draw head
@@ -54,7 +54,7 @@ instance Drawable [BezierControlPoints] where
 data CompositeCurve =
   CompositeCurve [BezierCurve2d]
 
-instance Drawable CompositeCurve where
+instance Draw CompositeCurve where
   draw curve = draw $ realizeCurve curve
 
 mkCompositeCurve :: BezierCurve2d -> CompositeCurve

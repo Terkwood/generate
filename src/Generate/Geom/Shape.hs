@@ -17,7 +17,7 @@ data Shape =
   Shape (V.Vector (V2 Double))
   deriving (Show)
 
-instance Drawable Shape where
+instance Draw Shape where
   draw (Shape vertices) =
     let line :: Line = fromJust $ mkLine vertices
      in draw line

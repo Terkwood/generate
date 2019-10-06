@@ -49,7 +49,7 @@ instance Scale Rect where
         topLeft' = circumPoint anchor phase $ dist * factor
      in Rect topLeft' (w * factor) (h * factor)
 
-instance Drawable Rect where
+instance Draw Rect where
   draw (Rect (V2 tlx tly) w h) = do
     rectangle tlx tly w h
 

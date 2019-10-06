@@ -1,0 +1,68 @@
+module Generate.Draw.Rorshock
+  ( Rorshock(..)
+  ) where
+
+data Rorshock d =
+  Rorshock
+    { state :: State
+    , drawable :: d
+    }
+
+data Outline c d =
+  Outline c Double d
+
+instance (CairoColour c, Draw d) => Element (Outline c d) where
+  realize (Outline c w d) =
+    return $ setColour c >> setLineWidth w >> draw d >> stroke
+
+data Solid d =
+  Solid d
+
+instance (Draw d) => Element (Solid d) where
+  realize (Solid d) = return $ draw d >> fill
+
+data Matte d =
+  Matte
+    { matte :: Generate (Render ())
+    , drawable :: d
+    }
+
+instance (Draw d) => Element (Matte d) where
+  realize (Matte matte drawable) =
+    matte >>= return . alphaMatte (draw drawable >> fill)
+
+data Dotted =
+  Dotted SimplePalette [V2 Double]
+
+instance Element Dotted where
+  realize (Dotted palette line) = do
+    thickness <- sampleRVar $ normal 0.1 0.02 >>= return . abs
+    col <- fgColour palette
+    fill <- realize $ Outline col thickness line
+    dotSize <- sampleRVar $ normal 1.0 0.4 >>= return . abs
+    dots <- mapM (realize . Dot palette dotSize) line
+    return $ foldr1 (>>) $ fill : dots
+
+instance (Points d, Draw d, BoundingRect d) => Element (Rorshock d) where
+  realize (Rorshock state@(State {..}) drawable) = do
+    strokeThickness <- sampleRVar (normal 0.2 0.1) >>= return . abs
+    rawBands <- waveBands state
+    colour <- fgColour palette
+    let bands = S.fold_ (>>) (pure ()) id rawBands
+    let base = do
+          setColour colour
+          draw drawable
+          closePath
+    thickness <- sampleRVar $ normal 0.8 0.4 >>= return . abs
+    let bounds = boundingRect drawable
+    let dotMatte = dots palette bounds thickness
+    realizer <-
+      randElem $
+      V.fromList
+        [ realize . Outline colour strokeThickness
+        , realize . Solid
+        , realize . Matte bands
+        , realize . Matte dotMatte
+        , \_ -> realize $ Dotted palette (points drawable)
+        ]
+    realizer base

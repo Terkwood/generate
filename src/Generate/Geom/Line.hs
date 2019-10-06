@@ -33,7 +33,7 @@ mkLine p =
         then Just $ Line ps
         else Nothing
 
-instance Drawable Line where
+instance Draw Line where
   draw (Line points) = do
     let (V2 x y) = V.head points
     moveTo x y

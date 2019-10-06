@@ -44,7 +44,7 @@ instance Translucent Splotch where
 instance Subdivisible Splotch where
   subdivide s@(Splotch shape _) = s {shape = subdivide shape}
 
-instance Drawable Splotch where
+instance Draw Splotch where
   draw (Splotch shape c) = do
     setColour c
     draw shape

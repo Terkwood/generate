@@ -31,8 +31,8 @@ data SplitCfg =
 instance Default SplitCfg where
   def =
     SplitCfg
-      { x = sampleRVar $ uniform 0.2 0.8
-      , y = sampleRVar $ uniform 0.2 0.8
+      { x = sampleRVar $ uniform 0.5 0.5
+      , y = sampleRVar $ uniform 0.5 0.5
       , axis =
           (sampleRVar $ uniform 0 1 :: Generate Int) >>= \i ->
             return $

@@ -2,6 +2,7 @@ module Generate.Colour
   ( CairoColour(..)
   , RadialRamp(..)
   , LinearRamp(..)
+  , Col(..)
   , hexcolour
   , setColour
   ) where
@@ -15,6 +16,13 @@ import Linear
 
 class CairoColour d where
   withColour :: d -> (Pattern -> Render ()) -> Render ()
+
+data Col =
+  forall d. CairoColour d =>
+            Col d
+
+instance CairoColour Col where
+  withColour (Col c) = withColour c
 
 instance CairoColour (RGB Double) where
   withColour col = withRGBPattern channelRed channelGreen channelBlue
@@ -38,11 +46,12 @@ instance CairoColour (Colour Double) where
     where
       RGB {..} = toSRGB col
 
-data RadialRamp = RadialRamp
-  { radialRampStart :: (V2 Double, Double)
-  , radialRampEnd :: (V2 Double, Double)
-  , radialRampStops :: [(Double, RGB Double, Double)]
-  }
+data RadialRamp =
+  RadialRamp
+    { radialRampStart :: (V2 Double, Double)
+    , radialRampEnd :: (V2 Double, Double)
+    , radialRampStops :: [(Double, RGB Double, Double)]
+    }
 
 instance CairoColour RadialRamp where
   withColour (RadialRamp (s@(V2 sx sy), sr) (e@(V2 ex ey), er) stops) f =
@@ -63,11 +72,12 @@ instance CairoColour RadialRamp where
         where
           RGB {..} = toSRGB $ uncurryRGB rgb $ col
 
-data LinearRamp = LinearRamp
-  { rampStart :: V2 Double
-  , rampEnd :: V2 Double
-  , rampStops :: [(Double, RGB Double, Double)]
-  }
+data LinearRamp =
+  LinearRamp
+    { rampStart :: V2 Double
+    , rampEnd :: V2 Double
+    , rampStops :: [(Double, RGB Double, Double)]
+    }
 
 instance CairoColour LinearRamp where
   withColour (LinearRamp s@(V2 sx sy) e@(V2 ex ey) stops) f =
