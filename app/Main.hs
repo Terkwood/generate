@@ -83,9 +83,21 @@ gNoiseWiggler = do
 gBlobCfg :: SimplePalette -> Generate BlobCfg
 gBlobCfg palette = do
   let gColour = fmap Col $ fgColour palette
-  let gRadius = sampleRVar $ normal 40 15
+  let gRadius = sampleRVar $ normal 20 15
+  let strokeRealizer = do
+        setLineWidth 0.5
+        closePath
+        stroke
+  gridDensity <- sampleRVar $ uniform 20 100
+  blocks <-
+    fmap (map $ scaleFromCenter 0.1) $
+    tiles def {rows = gridDensity, cols = gridDensity}
+  let blockMatte = foldr1 (>>) $ map (\b -> draw b >> fill) blocks
+  let blockRealizer = alphaMatte blockMatte fill
+  let gRealizer =
+        randElem $ V.fromList [fill, strokeRealizer, blockRealizer, fill]
   warper <- fmap fromWiggler gNoiseWiggler
-  return $ BlobCfg gColour gRadius warper
+  return $ BlobCfg gColour gRadius gRealizer warper
 
 gBlobs :: State -> Generate (Stream Blob)
 gBlobs (State {..}) = do
@@ -100,19 +112,19 @@ gGrid state@(State {..}) = do
   frame <- fmap (scaleFromCenter frameScale) fullFrame
   tiles <-
     recursiveSplit
-      def {shouldContinue = \(SplitStatus _ depth) -> pure $ depth < 5}
+      def {shouldContinue = \(SplitStatus _ depth) -> pure $ depth < 3}
       frame
   blobCfg <- gBlobCfg palette
   frameColour <- fgColour palette
   let filter rect = do
         let V2 x y = center rect
         noise <- noiseSample $ fmap (/ 500) $ V3 x y 0
-        return $ abs noise > 0.1
+        return $ True -- abs noise > 0.2
   bounds <- filterM filter $ map (scaleFromCenter 0.8) tiles
   let mask rect = do
-        let blobPoint = center rect
-        let blobGen = mkBlob blobCfg blobPoint
-        let blobs :: Stream Blob = S.take 7 $ S.repeatM blobGen
+        let blobGen = mkBlob blobCfg
+        let blobs :: Stream Blob =
+              S.take 20 $ S.mapM blobGen $ sampleStream rect
         blobSrc <- S.fold_ (>>) (pure ()) id $ S.map draw $ blobs
         return $ do alphaMatte (draw rect >> fill) blobSrc
   return $ (map (scaleFromCenter 1.3) bounds, S.mapM mask $ S.each bounds)
@@ -145,7 +157,7 @@ sketch state@(State {..}) = do
   blobs <- gBlobs state
   (bounds, grid) <- gGrid state
   hug <- gHugGrid bounds palette
-  return $ streamGenerates [background palette] >> grid >> S.take 5 hug
+  return $ streamGenerates [background palette] >> grid
 
 main :: IO ()
 main = do

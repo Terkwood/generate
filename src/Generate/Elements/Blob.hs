@@ -19,18 +19,20 @@ data Blob =
   Blob
     { blob :: Shape
     , colour :: Col
+    , realizer :: Render ()
     }
 
 instance Draw Blob where
   draw (Blob {..}) = do
     setColour colour
     draw blob
-    fill
+    realizer
 
 data BlobCfg =
   BlobCfg
     { gColour :: Generate Col
     , gRadius :: Generate Double
+    , gRealizer :: Generate (Render ())
     , warper :: Warper
     }
 
@@ -41,4 +43,5 @@ mkBlob (BlobCfg {..}) center = do
   let base = ngon 0 (floor width) radius center
   blob <- warp warper base
   colour <- gColour
-  return $ Blob blob colour
+  realizer <- gRealizer
+  return $ Blob blob colour realizer
