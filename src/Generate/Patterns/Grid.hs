@@ -95,10 +95,10 @@ tileDims GridCfg {cols, rows, width, height, ..} = do
   World {width = worldWidth, height = worldHeight, ..} <- asks world
   let (width', height') =
         (fromMaybe worldWidth width, fromMaybe worldHeight height)
-  return (width' / fromIntegral rows, height' / fromIntegral cols)
+  return (width' / fromIntegral cols, height' / fromIntegral rows)
 
 tiles :: GridCfg -> Generate [Rect]
 tiles cfg = do
-  (tileWidth, tileHeight) <- tileDims cfg
+  (tileWidth, tileHeight) <- (fmap . fmap) (+ 0.5) $ tileDims cfg
   points <- grid cfg {tileFocus = TopLeft}
   return $ map (\p -> Rect p tileWidth tileHeight) points

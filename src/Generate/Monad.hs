@@ -40,6 +40,7 @@ data Context =
   Context
     { world :: World
     , frame :: Int
+    , frameCount :: Int
     , noise :: Perlin
     , seed :: Int
     }

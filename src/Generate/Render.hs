@@ -49,7 +49,7 @@ mkRender world initState realizer stepper endFrame brainstorm seed = do
   renderCtx <- newIORef ()
   return
     RenderSpec
-      { renderCtx = \frame -> Context world frame (mkNoise seed) seed
+      { renderCtx = \frame -> Context world frame endFrame (mkNoise seed) seed
       , renderInitState = initState
       , renderRealizer = realizer
       , renderStepper = stepper

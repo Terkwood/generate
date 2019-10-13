@@ -28,6 +28,10 @@ module Generate
   , module Generate.Stream
   , module Generate.Filter.Fair
   , module Generate.Runner
+  , module Generate.Algo.Ramp
+  , module Generate.Colour.SignalPalette
+  , module Generate.Colour.THColours
+  , module Generate.Colour.SimplePalette
   ) where
 
 import "monad-extras" Control.Monad.Extra
@@ -44,7 +48,11 @@ import Data.Ord
 import Data.RVar
 import Data.Random.Distribution.Normal
 import Data.Random.Distribution.Uniform
+import Generate.Algo.Ramp
 import Generate.Colour
+import Generate.Colour.SignalPalette
+import Generate.Colour.SimplePalette
+import Generate.Colour.THColours
 import Generate.Compositing
 import Generate.Coord
 import Generate.Draw

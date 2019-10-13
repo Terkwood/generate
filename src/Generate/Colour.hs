@@ -4,6 +4,7 @@ module Generate.Colour
   , LinearRamp(..)
   , Col(..)
   , hexcolour
+  , hexcolourVec
   , setColour
   ) where
 
@@ -24,6 +25,12 @@ data Col =
 instance CairoColour Col where
   withColour (Col c) = withColour c
 
+instance CairoColour (V3 Double) where
+  withColour (V3 x y z) = withColour $ toRGB $ sRGB x y z
+
+instance CairoColour (V4 Double) where
+  withColour (V4 x y z w) = withColour $ (toRGB $ sRGB x y z, w)
+
 instance CairoColour (RGB Double) where
   withColour col = withRGBPattern channelRed channelGreen channelBlue
     where
@@ -42,9 +49,10 @@ instance CairoColour (Double, Double, Double, Double) where
   withColour (r, g, b, alpha) = withRGBAPattern r g b alpha
 
 instance CairoColour (Colour Double) where
-  withColour col = withRGBPattern channelRed channelGreen channelBlue
-    where
-      RGB {..} = toSRGB col
+  withColour col = withColour $ toSRGB col
+
+instance CairoColour (Colour Double, Double) where
+  withColour (c, o) = withColour $ (toSRGB c, o)
 
 data RadialRamp =
   RadialRamp
@@ -102,3 +110,8 @@ setColour col = withColour col $ \pattern -> setSource pattern
 
 hexcolour :: String -> RGB Double
 hexcolour = toSRGB . sRGB24read
+
+hexcolourVec :: String -> V3 Double
+hexcolourVec raw =
+  let RGB {channelRed, channelGreen, channelBlue} = toSRGB $ sRGB24read raw
+   in V3 channelRed channelGreen channelBlue
