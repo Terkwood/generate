@@ -6,6 +6,8 @@ module Generate.Monad
   , World(..)
   , noiseSample
   , noiseSampleWithScale
+  , noiseToTheta
+  , noiseToScale
   , runRand
   , randElem
   , randElemStable
@@ -24,28 +26,32 @@ import Linear
 import Math.Noise
 import Math.Noise.Modules.Perlin
 
-data World =
-  World
-    { width :: Double
-    , height :: Double
-    , scaleFactor :: Double
-    }
-  deriving (Eq, Show)
+data World = World
+  { width :: Double
+  , height :: Double
+  , scaleFactor :: Double
+  } deriving (Eq, Show)
 
 scaledDimensions :: World -> (Int, Int)
 scaledDimensions World {width, height, scaleFactor, ..} =
   (round $ width * scaleFactor, round $ height * scaleFactor)
 
-data Context =
-  Context
-    { world :: World
-    , frame :: Int
-    , frameCount :: Int
-    , noise :: Perlin
-    , seed :: Int
-    }
+data Context = Context
+  { world :: World
+  , frame :: Int
+  , frameCount :: Int
+  , time :: Double
+  , noise :: Perlin
+  , seed :: Int
+  }
 
 type Generate = StateT PureMT (Reader Context)
+
+noiseToTheta :: Double -> Double
+noiseToTheta n = (n + 1) * pi
+
+noiseToScale :: Double -> Double
+noiseToScale n = (n + 1) / 2
 
 noiseSample :: V3 Double -> Generate (Double)
 noiseSample (V3 x y z) = do

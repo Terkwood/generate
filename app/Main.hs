@@ -10,64 +10,60 @@ import Generate.Patterns.Grid
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 
-mkPalette :: Generate SimplePalette
-mkPalette =
-  randElem $
-  V.fromList
-    [ mkSimplePalette
-        "030303"
-        ["68A793", "ECBF1F", "E2B01A", "B95928", "8F253F"]
-    , mkSimplePalette "211721" ["4A294D", "F3237F", "DC5956", "F383D0"]
-    , mkSimplePalette "EFC271" ["3E8A79", "E9A931", "F03E4D", "CC3433"]
-    , mkSimplePalette "A35A49" ["35322B", "FDC8D0", "E69A9A", "FCFEFD"]
-    ]
+palette :: SimplePalette
+palette = mkSimplePalette "b5fffa" ["652141", "F14111", "EE7820", "F3BF0F"]
 
-background :: SimplePalette -> Generate (Render ())
-background palette = do
-  World {..} <- asks world
-  return $ do
-    setColour $ bgColour palette
-    rectangle 0 0 width height
-    fill
+data LineCfg = LineCfg
+  { lineLength :: Int
+  , gapLength :: Int
+  }
 
-bgStream :: Stream (Render ())
-bgStream = do
-  palette <- lift $ mkPalette
-  render <- lift $ background palette
-  S.yield render
+cfgLength :: LineCfg -> WalkHead -> Int
+cfgLength cfg Line = lineLength cfg
+cfgLength cfg Gap = gapLength cfg
 
-data State =
-  State
-    { palette :: SimplePalette
-    , signalPalette :: SignalPalette
-    }
+data Walk = Walk
+  { head :: WalkHead
+  , headLength :: Int
+  , walkPos :: V2 Double
+  }
 
-start :: Generate State
-start = do
-  palette <- mkPalette
-  let [a, b, c, d] =
-        [V3 0.5 0.5 0.5, V3 0.5 0.5 0.5, V3 2.0 1.0 0.0, V3 0.5 0.2 0.25]
-  let signalPalette = mkCosinePalette a b c d
-  return $ State palette signalPalette
+data WalkHead
+  = Line
+  | Gap
 
-gBlocks :: State -> Generate (Stream (Render ()))
-gBlocks state@(State {..}) = do
-  World {..} <- asks world
-  blocks <- tiles def {rows = 300, cols = 200}
-  let signal x y =
-        sin ((pi / 2) * (x / width / 2) + (fromIntegral $ floor x `div` 40)) +
-        y / height
-  let colourBlock block@(Rect (V2 x y) _ _) = do
-        setColour $ signalColour signalPalette $ (signal x y)
-        draw block
-        fill
-  return $ do S.map colourBlock $ S.each blocks
+altHead Line = Gap
+altHead Gap = Line
 
-sketch :: State -> Generate (Stream (Render ()))
-sketch state@(State {..}) = do
-  blocks <- gBlocks state
-  return $ streamGenerates [background palette] >> blocks
+step :: LineCfg -> Walk -> Generate Walk
+step cfg (Walk head headLength (V2 x y)) = do
+  terminalLength :: Double <- sampleRVar $ normal lengthDouble 20
+  let head' =
+        if headLength > floor terminalLength
+          then altHead head
+          else head
+  return $ Walk head' (cfgLength cfg head') nextPos
+  where
+    nextPos = V2 x (y + 1)
+    lengthDouble = fromIntegral $ cfgLength cfg head
+
+dots :: Stream (Render ())
+dots = do
+  let points = unfoldGenerates $ grid def
+  let circles = S.map (\p -> Circle p 10) points
+  S.mapM
+    (\c@(Circle p@(V2 x y) r) -> do
+       colour <- fgColour palette
+       t <- asks time
+       noise <- noiseSample (V3 x y $ t)
+       let center = noiseShift noise 10 p
+       return $ do
+         setColour colour
+         draw $ Circle center r
+         fill)
+    circles
 
 main :: IO ()
 main = do
-  runStatefulInvocation start sketch return
+  runSketch $ do
+    return $ streamGenerates [background $ bgColour palette] >> dots

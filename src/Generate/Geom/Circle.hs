@@ -4,6 +4,7 @@ module Generate.Geom.Circle
   , circumPhase
   , overlap
   , rotateAbout
+  , noiseShift
   ) where
 
 import Data.RVar
@@ -13,6 +14,7 @@ import Graphics.Rendering.Cairo
 import Linear
 
 import Generate.Draw
+import Generate.Monad
 import Generate.Patterns.Sampling
 
 data Circle =
@@ -28,6 +30,9 @@ instance Sample Circle where
     theta <- sampleRVar $ uniform 0 (2 * pi)
     r' <- sampleRVar $ uniform 0 r
     return $ circumPoint p theta r'
+
+noiseShift :: Double -> Double -> V2 Double -> V2 Double
+noiseShift n strength p = circumPoint p (noiseToTheta n) strength
 
 overlap :: Circle -> Circle -> Double
 overlap (Circle c1 r1) (Circle c2 r2) = r1 + r2 - distance c1 c2

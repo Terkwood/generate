@@ -23,41 +23,35 @@ import qualified Streaming.Prelude as S
 import Generate.Monad
 import Generate.Stream
 
-data RenderSpec a =
-  RenderSpec
-    { renderCtx :: Int -> Context
-    , renderInitState :: Generate a
-    , renderRealizer :: a -> Generate (Stream (Render ()))
-    , renderStepper :: a -> Generate a
-    , renderEndFrame :: Int
-    , renderBrainstorm :: Bool
-    , renderDimensions :: (Int, Int)
-    , renderRNG :: PureMT
-    , renderLastState :: Generate a
-    }
+data RenderSpec a = RenderSpec
+  { renderCtx :: Int -> Context
+  , renderRealizer :: IO (Stream (Render ()))
+  , renderEndFrame :: Int
+  , renderBrainstorm :: Bool
+  , renderDimensions :: (Int, Int)
+  , renderRNG :: PureMT
+  }
 
 mkRender ::
-     World
-  -> Generate a
-  -> (a -> Generate (Stream (Render ())))
-  -> (a -> Generate a)
-  -> Int
-  -> Bool
-  -> Int
-  -> IO (RenderSpec a)
-mkRender world initState realizer stepper endFrame brainstorm seed = do
+     World -> IO (Stream (Render ())) -> Int -> Bool -> Int -> IO (RenderSpec a)
+mkRender world realizer endFrame brainstorm seed = do
   renderCtx <- newIORef ()
   return
     RenderSpec
-      { renderCtx = \frame -> Context world frame endFrame (mkNoise seed) seed
-      , renderInitState = initState
+      { renderCtx =
+          \frame ->
+            Context
+              world
+              frame
+              endFrame
+              (fromIntegral frame / 24)
+              (mkNoise seed)
+              seed
       , renderRealizer = realizer
-      , renderStepper = stepper
       , renderEndFrame = endFrame
       , renderBrainstorm = brainstorm
       , renderDimensions = scaledDimensions world
       , renderRNG = pureMT $ fromInteger $ toInteger seed
-      , renderLastState = initState
       }
 
 mkNoise :: Int -> Perlin
@@ -70,26 +64,15 @@ mkNoise seed =
     , perlinFrequency = 1
     }
 
-getRender :: RenderSpec a -> Int -> Generate (Stream (Render ()))
-getRender (RenderSpec {..}) frame = do
-  state <-
-    if frame == 0
-      then renderInitState
-      else renderLastState
-  renderRealizer state
-
 renderFrame :: RenderSpec a -> Int -> IO Surface
 renderFrame spec@(RenderSpec {renderDimensions = (w, h), ..}) frame = do
-  let layers :: Stream (Render ()) = realize $ getRender spec frame
+  layers :: Stream (Render ()) <- renderRealizer
   surface <- createImageSurface FormatARGB32 w h
+  let ctx = renderCtx frame
   let scale = scaleFactor $ world ctx
   prepareSurface scale surface
   S.mapM_ pure $ runStream scale ctx renderRNG layers surface
   return surface
-  where
-    realize :: Generate a -> a
-    realize = fst . (runGenerate ctx renderRNG)
-    ctx = renderCtx frame
 
 realizeCommand :: Surface -> Render () -> IO ()
 realizeCommand surface cmd = renderWith surface cmd

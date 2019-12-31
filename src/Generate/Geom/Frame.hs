@@ -17,9 +17,8 @@ import Generate.Monad
 import Generate.Patterns.Sampling
 
 data Frame = Frame
-  -- | The outer boundaries of the frame.
-  { outer :: Rect
-  , thickness :: Double
+  { outer :: Rect, thickness :: Double
+  
   }
 
 instance Draw Frame where

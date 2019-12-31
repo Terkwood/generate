@@ -6,6 +6,7 @@ module Generate
   , module Data.List
   , module Data.List.Split
   , module Data.Maybe
+  , module Data.IORef
   , module Data.Ord
   , module Data.RVar
   , module Data.Default
@@ -41,6 +42,7 @@ import Data.Colour.RGBSpace.HSV
 import Data.Colour.SRGB
 import Data.Default
 import Data.Fixed
+import Data.IORef
 import Data.List
 import Data.List.Split
 import Data.Maybe

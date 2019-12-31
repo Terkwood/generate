@@ -1,0 +1,12 @@
+#!/bin/bash
+
+pid=`pgrep "^g$"`
+stack run -- --s 1.4 --f 1000000000 &
+sleep 4
+
+if [ -e .started ]; then
+    rm .started
+    if [ ! -z pid ]; then
+        kill $pid
+    fi
+fi

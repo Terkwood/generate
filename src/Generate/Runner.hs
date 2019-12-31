@@ -6,8 +6,7 @@ module Generate.Runner
   , screen
   , file
   , timeSeed
-  , runInvocation
-  , runStatefulInvocation
+  , runSketch
   , runRand
   , noiseSample
   ) where
@@ -37,16 +36,10 @@ import Generate.Monad
 import Generate.Render
 import Generate.Stream
 
-runInvocation :: Generate (Stream (Render ())) -> IO ()
-runInvocation layers = runStatefulInvocation (pure ()) (const $ layers) (return)
-
-runStatefulInvocation ::
-     Generate a
-  -> (a -> Generate (Stream (Render ())))
-  -> (a -> Generate a)
-  -> IO ()
-runStatefulInvocation initState realizer stepper =
+runSketch :: IO (Stream (Render ())) -> IO ()
+runSketch realizer =
   runCommand $ \opts args -> do
+    writeFile ".started" "_"
     seed <-
       if (optSeed opts) == 0
         then timeSeed
@@ -56,9 +49,7 @@ runStatefulInvocation initState realizer stepper =
           \newSeed ->
             mkRender
               world
-              initState
               realizer
-              stepper
               (optFrames opts)
               (optBrainstorm opts)
               newSeed
