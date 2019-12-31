@@ -64,26 +64,26 @@ packages:
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
 
-extra-deps: [
-  gtk-0.14.7,
-  gio-0.13.4.1,
-  gtkglext-0.13.1.1,
-  polynomial-0.7.3,
-  splines-0.5.0.1,
-  Noise-1.0.6,
-  accelerate-1.2.0.1,
-  accelerate-llvm-1.2.0.0,
-  accelerate-llvm-native-1.2.0.0,
-  accelerate-llvm-ptx-1.2.0.0,
-  accelerate-io-1.2.0.0,
-  llvm-hs-6.0.0,
-  llvm-hs-pure-6.0.0,
-  colour-accelerate-0.3.0.0,
-  linear-accelerate-0.6.0.0,
-  gloss-raster-accelerate-2.0.0.0,
-  cairo-0.13.4.2
-]
-
+extra-deps:
+  - gtk-0.15.4
+  - gio-0.13.8.0
+  - third_party/gtkglext
+  - pango-0.13.8.0
+  - polynomial-0.7.3
+  - splines-0.5.0.1
+  - Noise-1.0.6
+  - accelerate-1.2.0.1
+  - accelerate-llvm-1.2.0.0
+  - accelerate-llvm-native-1.2.0.0
+  - accelerate-llvm-ptx-1.2.0.0
+  - accelerate-io-1.2.0.0
+  - llvm-hs-6.0.0
+  - llvm-hs-pure-6.0.0
+  - colour-accelerate-0.3.0.0
+  - linear-accelerate-0.6.0.0
+  - gloss-raster-accelerate-2.0.0.0
+  - cairo-0.13.4.2
+  - glib-0.13.8.0
 
 flags:
   llvm-hs:
