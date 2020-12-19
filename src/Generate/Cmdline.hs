@@ -17,8 +17,8 @@ data MainOptions =
 
 instance Options MainOptions where
   defineOptions =
-    pure MainOptions <*> simpleOption "w" 500 "Piece width." <*>
-    simpleOption "h" 636 "Piece height." <*>
+    pure MainOptions <*> simpleOption "w" 1000 "Piece width." <*>
+    simpleOption "h" 1272 "Piece height." <*>
     simpleOption "o" "" "Save location." <*>
     simpleOption "s" 1 "Scale factor." <*>
     simpleOption "e" 0 "Rng seed." <*>

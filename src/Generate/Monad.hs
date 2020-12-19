@@ -32,9 +32,9 @@ data World = World
   , scaleFactor :: Double
   } deriving (Eq, Show)
 
-scaledDimensions :: World -> (Int, Int)
+scaledDimensions :: World -> V2 Int
 scaledDimensions World {width, height, scaleFactor, ..} =
-  (round $ width * scaleFactor, round $ height * scaleFactor)
+  V2 (round $ width * scaleFactor) (round $ height * scaleFactor)
 
 data Context = Context
   { world :: World

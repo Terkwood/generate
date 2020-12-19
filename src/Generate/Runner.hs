@@ -12,6 +12,7 @@ module Generate.Runner
   ) where
 
 import Control.Monad.Reader
+import Control.Concurrent
 import Control.Monad.State as State
 import Data.Colour.RGBSpace.HSV
 import Data.Colour.SRGB
@@ -25,10 +26,9 @@ import Data.Random.Source.PureMT
 import Data.Time.Clock.POSIX
 import qualified Data.Vector as V
 import Graphics.Rendering.Cairo as Cairo
-import Graphics.UI.Gtk
-import Graphics.UI.Gtk.Gdk.Events
-import Graphics.UI.Gtk.OpenGL.Config
-import Graphics.UI.Gtk.OpenGL.DrawingArea
+import SDL
+import SDL.Event
+import SDL.Cairo
 import Options
 
 import Generate.Cmdline
@@ -63,20 +63,26 @@ timeSeed = getPOSIXTime >>= \t -> return $ round . (* 1000) $ t
 
 screen :: Int -> (Int -> IO (RenderSpec a)) -> IO ()
 screen seed renderFactory = do
-  initGUI
-  window <- windowNew
-  glCfg <- glConfigNew [GLModeRGBA, GLModeDouble]
-  drawingArea <- glDrawingAreaNew glCfg
+  initializeAll
   spec@(RenderSpec {..}) <- renderFactory seed
+  window <- createWindow "generate" defaultWindow { windowInitialSize = fmap fromIntegral renderDimensions }
+  renderer <- createRenderer window (-1) defaultRenderer { rendererTargetTexture = True }
+  texture <- createCairoTexture' renderer window
   specRef <- newIORef $ spec
   frameRef <- newIORef 0
-  containerAdd window drawingArea
-  timeoutAdd (renderToScreen drawingArea frameRef specRef) 16
-  window `onKeyPress` ui frameRef specRef renderFactory
-  window `onDestroy` mainQuit
-  uncurry (windowSetDefaultSize window) renderDimensions
-  widgetShowAll window
-  mainGUI
+  let loop = do
+	withCairoTexture' texture $ \surface -> renderToScreen surface frameRef specRef
+	rendererDrawColor renderer $= V4 255 255 255 255
+	clear renderer
+	copy renderer texture Nothing Nothing
+	present renderer
+	threadDelay 16000 -- sleep 16 ms
+	events <- pollEvents
+	eventReports :: [Bool] <- mapM (ui frameRef specRef renderFactory) events
+	let shouldClose = any id $ eventReports
+	unless shouldClose $ loop
+  loop
+  destroyWindow window
 
 file :: String -> Int -> (Int -> IO (RenderSpec a)) -> IO ()
 file path seed renderFactory = do
@@ -100,7 +106,7 @@ file path seed renderFactory = do
 seedToFile :: String -> RenderSpec a -> IO ()
 seedToFile path spec@(RenderSpec {..}) = do
   let seed' = seed $ renderCtx 0
-  let (w, h) = renderDimensions
+  let V2 w h = renderDimensions
   let writeFrame i = do
         let filePath =
               path ++ "__" ++ (show seed') ++ "__" ++ (show i) ++ ".png"
@@ -110,14 +116,13 @@ seedToFile path spec@(RenderSpec {..}) = do
   putStrLn $ "Wrote" ++ (show seed') ++ "to file"
   return ()
 
-renderToScreen :: GLDrawingArea -> IORef Int -> IORef (RenderSpec a) -> IO Bool
-renderToScreen da frameRef specRef = do
-  dw <- widgetGetDrawWindow da
+renderToScreen :: Cairo.Surface -> IORef Int -> IORef (RenderSpec a) -> IO Bool
+renderToScreen screen frameRef specRef = do
   frame <- readIORef frameRef
-  spec@(RenderSpec {renderDimensions = (w, h), ..}) <- readIORef specRef
+  spec@(RenderSpec {renderDimensions = V2 w h, ..}) <- readIORef specRef
   surface <- renderFrame spec frame
   modifyIORef frameRef (\frame -> (frame + 1) `mod` renderEndFrame)
-  renderWithDrawable dw $ do
+  renderWith screen $ do
     setSourceSurface surface 0 0
     Cairo.rectangle 0 0 (fromIntegral w) (fromIntegral h)
     fill
@@ -129,16 +134,19 @@ ui ::
   -> (Int -> IO (RenderSpec a))
   -> Event
   -> IO Bool
-ui frameRef specRef renderFactory (Key {eventKeyVal, ..}) = do
-  case eventKeyVal of
-    65307 -> mainQuit
-    65507 -> mainQuit
-    114 -> do
-      modifyIORef frameRef (const 0)
-      newSeed <- timeSeed
-      putStrLn $ "New seed is: " ++ (show newSeed)
-      newSpec <- renderFactory newSeed
-      modifyIORef specRef (const newSpec)
-    _ -> return ()
+ui frameRef specRef renderFactory (Event {eventPayload = KeyboardEvent (KeyboardEventData {keyboardEventKeysym = Keysym {keysymKeycode, .. }, ..})}) = do
+  case keysymKeycode of
+      Keycode 65307 -> return True -- ESC
+      Keycode 65507 -> return True -- Also ESC
+      Keycode 114 -> do -- r for 'reseed'
+	modifyIORef frameRef (const 0)
+	newSeed <- timeSeed
+	putStrLn $ "New seed is: " ++ (show newSeed)
+	newSpec <- renderFactory newSeed
+	modifyIORef specRef (const newSpec)
+	return True
+      _ -> return True
   return True
-ui _ _ _ _ = return True
+ui _ _ _ (Event {eventPayload = WindowClosedEvent _, ..}) = pure True
+ui _ _ _ _ = pure False
+

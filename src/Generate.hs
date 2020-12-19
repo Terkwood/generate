@@ -24,7 +24,6 @@ module Generate
   , module Generate.Geom.Rect
   , module Generate.Geom.Line
   , module Generate.Geom.Shape
-  , module Generate.Geom.Spline
   , module Generate.Monad
   , module Generate.Stream
   , module Generate.Filter.Fair
@@ -64,7 +63,6 @@ import Generate.Geom.Circle
 import Generate.Geom.Line
 import Generate.Geom.Rect
 import Generate.Geom.Shape
-import Generate.Geom.Spline
 import Generate.Monad
 import Generate.Runner
 import Generate.Stream

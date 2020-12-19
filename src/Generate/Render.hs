@@ -19,6 +19,7 @@ import Graphics.Rendering.Cairo
 import Math.Noise.Modules.Perlin
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
+import Linear
 
 import Generate.Monad
 import Generate.Stream
@@ -28,7 +29,7 @@ data RenderSpec a = RenderSpec
   , renderRealizer :: IO (Stream (Render ()))
   , renderEndFrame :: Int
   , renderBrainstorm :: Bool
-  , renderDimensions :: (Int, Int)
+  , renderDimensions :: V2 Int
   , renderRNG :: PureMT
   }
 
@@ -65,7 +66,7 @@ mkNoise seed =
     }
 
 renderFrame :: RenderSpec a -> Int -> IO Surface
-renderFrame spec@(RenderSpec {renderDimensions = (w, h), ..}) frame = do
+renderFrame spec@(RenderSpec {renderDimensions = V2 w h, ..}) frame = do
   layers :: Stream (Render ()) <- renderRealizer
   surface <- createImageSurface FormatARGB32 w h
   let ctx = renderCtx frame

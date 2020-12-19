@@ -28,14 +28,11 @@ dependencies:
 - random-fu
 - mtl
 - rvar
-- gtk
 - transformers
-- gtkglext
 - options
 - time
 - linear
 - lens
-- splines
 - smoothie
 - split
 - Noise
@@ -53,7 +50,8 @@ dependencies:
 - data-default
 - extra
 - streaming
-
+- sdl2
+- sdl2-cairo
 
 default-extensions:
 - NamedFieldPuns
